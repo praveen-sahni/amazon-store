@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon - Shop Everything</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+    <link rel="stylesheet" href="style.css">
+    <meta name="api-base-url" content="">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-top">
+            <div class="logo">
+                <a href="#">Amazon</a>
+            </div>
+            <div class="delivery-info">
+                <i class="fas fa-map-marker-alt"></i>
+                <div>
+                    <span class="deliver-to">Deliver to</span>
+                    <span class="location">Select Location</span>
+                </div>
+            </div>
+            <div class="search-bar">
+                <select id="category-select">
+                    <option value="all">All</option>
+                    <option value="electronics">Electronics</option>
+                    <option value="fashion">Fashion</option>
+                    <option value="home">Home & Kitchen</option>
+                    <option value="books">Books</option>
+                </select>
+                <input type="text" id="search-input" placeholder="Search Amazon">
+                <button id="search-btn"><i class="fas fa-search"></i></button>
+            </div>
+            <div class="nav-actions">
+                <div class="nav-item account">
+                    <span class="nav-line-1">Hello, Sign in</span>
+                    <span class="nav-line-2">Account & Lists <i class="fas fa-caret-down"></i></span>
+                </div>
+                <div class="nav-item wishlist-nav" onclick="toggleWishlistPage()">
+                    <i class="fas fa-heart"></i>
+                    <span class="wishlist-nav-text">Wishlist</span>
+                </div>
+                <div class="nav-item orders">
+                    <span class="nav-line-1">Returns</span>
+                    <span class="nav-line-2">& Orders</span>
+                </div>
+                <div class="nav-item cart" id="cart-icon">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count" id="cart-count">0</span>
+                    <span class="cart-text">Cart</span>
+                </div>
+            </div>
+        </div>
+        <nav class="header-bottom">
+            <ul class="nav-links">
+                <li><a href="#"><i class="fas fa-bars"></i> All</a></li>
+                <li><a href="#">Today's Deals</a></li>
+                <li><a href="#">Customer Service</a></li>
+                <li><a href="#">Registry</a></li>
+                <li><a href="#">Gift Cards</a></li>
+                <li><a href="#">Sell</a></li>
+                <li><a href="/admin"><i class="fas fa-cog"></i> Admin</a></li>
+            </ul>
+        </nav>
+    </header>
+    <div class="share-link-banner" id="share-link-banner">
+        Share this page from any device: <span id="share-link-text">Loading URL...</span>
+    </div>
+    <section class="hero">
+        <div class="hero-slider">
+            <div class="slide active" style="background-image: url('https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600')">
+                <div class="slide-content">
+                    <h2>Summer Sale</h2>
+                    <p>Up to 50% off on selected items</p>
+                    <button class="shop-now-btn">Shop Now</button>
+                </div>
+            </div>
+            <div class="slide" style="background-image: url('https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600')">
+                <div class="slide-content">
+                    <h2>New Arrivals</h2>
+                    <p>Discover the latest trends</p>
+                    <button class="shop-now-btn">Explore</button>
+                </div>
+            </div>
+            <div class="slide" style="background-image: url('https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1600')">
+                <div class="slide-content">
+                    <h2>Electronics Fest</h2>
+                    <p>Best deals on gadgets</p>
+                    <button class="shop-now-btn">View Deals</button>
+                </div>
+            </div>
+        </div>
+        <button class="slider-btn prev"><i class="fas fa-chevron-left"></i></button>
+        <button class="slider-btn next"><i class="fas fa-chevron-right"></i></button>
+        <div class="slider-dots"></div>
+    </section>
+    <section class="category-cards">
+        <div class="card-container">
+            <div class="category-card" data-category="electronics">
+                <h3>Electronics</h3>
+                <img src="https://www.electronicsforyou.biz/wp-content/uploads/2019/08/Consumer-Electronics-Appliance_Sept-19-1.jpg" alt="Electronics">
+                <a href="#">Shop now</a>
+            </div>
+            <div class="category-card" data-category="fashion">
+                <h3>Fashion</h3>
+                <img src="https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcQt8szzarR7mtQ3atqzpfP5pnakSifwhKiGxlSOn9V-A1kdj2YK_EtTPe07OD1z_i50xF3hJyCneC_6mCBE8aRIhSbj5Ojj3rM0AmWUgHnSC0026wgyGZHsSQ" alt="Fashion">
+                <a href="#">Shop now</a>
+            </div>
+            <div class="category-card" data-category="home">
+                <h3>Home & Kitchen</h3>
+                <img src="https://www.asenseinterior.com/assets/uploads//b4e6e0de9515d7e2968d3fe6fa22e042.jpg" alt="Home">
+                <a href="#">Shop now</a>
+            </div>
+            <div class="category-card" data-category="books">
+                <h3>Books</h3>
+                <img src="https://images.theconversation.com/files/45159/original/rptgtpxd-1396254731.jpg?ixlib=rb-4.1.0&q=30&auto=format&w=754&h=502&fit=crop&dpr=2" alt="Books">
+                <a href="#">Shop now</a>
+            </div>
+        </div>
+    </section>
+    <section class="products-section">
+        <div class="section-header">
+            <h2>Featured Products</h2>
+            <div class="filter-sort">
+                <select id="sort-select">
+                    <option value="featured">Featured</option>
+                    <option value="price-low">Price: Low to High</option>
+                    <option value="price-high">Price: High to Low</option>
+                    <option value="rating">Customer Rating</option>
+                </select>
+            </div>
+        </div>
+        <div class="products-grid" id="products-grid"></div>
+    </section>
+    <section class="deal-section">
+        <h2><i class="fas fa-bolt"></i> Deal of the Day</h2>
+        <div class="deal-container" id="deal-container"></div>
+    </section>
+    <section class="recently-viewed">
+        <h2>Recently Viewed</h2>
+        <div class="recently-viewed-container" id="recently-viewed">
+            <p class="empty-message">No recently viewed items</p>
+        </div>
+    </section>
+    <div class="cart-sidebar" id="cart-sidebar">
+        <div class="cart-header">
+            <h2>Shopping Cart</h2>
+            <button class="close-cart" id="close-cart"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="cart-items" id="cart-items"></div>
+        <div class="cart-footer">
+            <div class="cart-subtotal">
+                <span>Subtotal:</span>
+                <span id="cart-subtotal">$0.00</span>
+            </div>
+            <button class="checkout-btn" id="checkout-btn">Proceed to Checkout</button>
+        </div>
+    </div>
+    <div class="cart-overlay" id="cart-overlay"></div>
+    <div class="modal" id="quick-view-modal">
+        <div class="modal-content">
+            <button class="modal-close" id="modal-close"><i class="fas fa-times"></i></button>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+    <div class="modal checkout-modal" id="checkout-modal">
+        <div class="modal-content checkout-modal-content">
+            <button class="modal-close" id="checkout-modal-close"><i class="fas fa-times"></i></button>
+            <div class="modal-body checkout-modal-body">
+                <div class="checkout-header">
+                    <h2>Checkout</h2>
+                    <p id="checkout-item-count">1 item</p>
+                </div>
+                <div class="checkout-layout">
+                    <form class="checkout-form" id="checkout-form">
+                        <div class="checkout-field">
+                            <label for="checkout-name">Full Name</label>
+                            <input type="text" id="checkout-name" name="customerName" required>
+                        </div>
+                        <div class="checkout-field">
+                            <label for="checkout-email">Email</label>
+                            <input type="email" id="checkout-email" name="email" required>
+                        </div>
+                        <div class="checkout-field">
+                            <label for="checkout-address">Shipping Address</label>
+                            <textarea id="checkout-address" name="address" rows="4" required></textarea>
+                        </div>
+                        <div class="checkout-field">
+                            <label for="checkout-payment">Payment Method</label>
+                            <select id="checkout-payment" name="paymentMethod">
+                                <option value="card">Credit / Debit Card</option>
+                                <option value="cod">Cash on Delivery</option>
+                                <option value="upi">UPI</option>
+                            </select>
+                            <div id="cod-instructions" class="cod-instructions" style="display: none;"></div>
+                        </div>
+                        <button type="submit" class="modal-add-btn" id="checkout-submit-btn">Place Order</button>
+                    </form>
+                    <div class="checkout-summary">
+                        <h3>Order Summary</h3>
+                        <div class="checkout-summary-list" id="checkout-summary-items"></div>
+                        <div class="checkout-total">
+                            <span>Total</span>
+                            <strong id="checkout-summary-total">$0.00</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal" id="order-success-modal">
+        <div class="modal-content success-modal-content">
+            <div class="success-modal-body">
+                <div class="success-icon-container" id="success-icon-container">
+                    <i class="fas fa-check"></i>
+                </div>
+                <h2>Order Confirmed!</h2>
+                <p>Thank you for shopping with us. Your order has been successfully placed.</p>
+                <div class="success-order-card">
+                    <div class="success-order-row">
+                        <span class="success-order-label">Order ID</span>
+                        <span class="success-order-value" id="success-order-id">-</span>
+                    </div>
+                    <div class="success-order-row">
+                        <span class="success-order-label">Payment Method</span>
+                        <span class="success-order-value" id="success-order-payment">-</span>
+                    </div>
+                    <div class="success-order-row">
+                        <span class="success-order-label">Amount Payable</span>
+                        <span class="success-order-value" id="success-order-total">-</span>
+                    </div>
+                </div>
+                <div class="success-instructions-box" id="success-instructions-box" style="display: none;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Please keep the exact amount ready in cash or prepare to scan a UPI QR code at delivery.</span>
+                </div>
+                <button class="success-modal-btn" id="success-modal-close-btn">Continue Shopping</button>
+            </div>
+        </div>
+    </div>
+    <div class="wishlist-page" id="wishlist-page">
+        <div class="wishlist-page-header">
+            <h2><i class="fas fa-heart"></i> My Wishlist</h2>
+            <button class="close-wishlist-page" onclick="toggleWishlistPage()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="wishlist-page-content" id="wishlist-page-content">
+            <p class="empty-message">Loading your wishlist...</p>
+        </div>
+    </div>
+    <div class="wishlist-page-overlay" id="wishlist-page-overlay" onclick="toggleWishlistPage()"></div>
+    <div class="toast" id="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toast-message">Item added to cart</span>
+    </div>
+    <footer class="footer">
+        <div class="back-to-top" id="back-to-top"><span>Back to top</span></div>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>Get to Know Us</h4>
+                <ul>
+                    <li><a href="#">Careers</a></li>
+                    <li><a href="#">Blog</a></li>
+                    <li><a href="#">About Amazone</a></li>
+                    <li><a href="#">Investor Relations</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Make Money with Us</h4>
+                <ul>
+                    <li><a href="#">Sell products on Amazon</a></li>
+                    <li><a href="#">Sell on Amazon Business</a></li>
+                    <li><a href="#">Become an Affiliate</a></li>
+                    <li><a href="#">Advertise Your Products</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Amazon Payment Products</h4>
+                <ul>
+                    <li><a href="#">Amazon Business Card</a></li>
+                    <li><a href="#">Shop with Points</a></li>
+                    <li><a href="#">Reload Your Balance</a></li>
+                    <li><a href="#">Currency Converter</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Let Us Help You</h4>
+                <ul>
+                    <li><a href="#">Your Account</a></li>
+                    <li><a href="#">Your Orders</a></li>
+                    <li><a href="#">Shipping Rates & Policies</a></li>
+                    <li><a href="#">Returns & Replacements</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <div class="footer-logo">Amazon</div>
+            <p><span id="footer-year">2024</span> Amazon Clone. All rights reserved.</p>
+        </div>
+    </footer>
+    <script src="app.js" defer></script>
+</body>
+</html>
