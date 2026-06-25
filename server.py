@@ -683,6 +683,7 @@ PRODUCT_CATEGORIES = {
     "fashion": "Our fashion collection includes Levi's 501 jeans ($49.50), Nike Air Max 270 ($150), and North Face Thermoball jackets ($179).",
     "watches": "Our watch collection: Fossil Grant Chronograph ($179), Tissot PRX Powermatic 80 ($695), Citizen Eco-Drive Promaster ($395), and the iconic Rolex Submariner ($9750).",
     "gym": "Gym & fitness favorites: Bowflex SelectTech 552 dumbbells ($349), Fit Simplify resistance bands ($29.95), Gaiam yoga mat ($69.98), and BlenderBottle shaker cup ($14.99).",
+    "travel": "Travel essentials: Samsonite Winfield 2 carry-on ($199.99), Travelpro Maxlite 5 backpack ($89.99), Cabeau travel pillow ($39.99), and Veken packing cubes ($24.99).",
     "home": "For home & kitchen: Instant Pot Duo ($79.95), Dyson V15 Detect ($649.99), and KitchenAid Artisan Mixer ($379.99).",
     "books": "Bestselling books: Atomic Habits by James Clear ($14.99) and The Psychology of Money ($13.79)."
 }
@@ -755,7 +756,7 @@ def chat():
             lines.append(f'<a href="#" onclick="openQuickView({pid});event.preventDefault()">{title}</a> — ${price:.2f}')
         response = "Here are some products you might be interested in:<br>" + "<br>".join(lines)
     elif any(w in msg.lower() for w in ["what", "which", "tell", "show", "find", "search", "looking for", "recommend"]):
-        response = "I can help you find products! Try asking about a category (electronics, fashion, watches, gym, home, books) or a specific product name. What are you looking for?"
+        response = "I can help you find products! Try asking about a category (electronics, fashion, watches, gym, travel, home, books) or a specific product name. What are you looking for?"
     else:
         fallbacks = [
             "That's an interesting question! I can help with product searches, shipping info, returns, and more. Try asking 'What electronics do you have?' or 'What's your return policy?'",
