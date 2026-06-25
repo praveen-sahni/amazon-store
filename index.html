@@ -37,9 +37,9 @@
                 <button id="search-btn"><i class="fas fa-search"></i></button>
             </div>
             <div class="nav-actions">
-                <div class="nav-item account">
-                    <span class="nav-line-1">Hello, Sign in</span>
-                    <span class="nav-line-2">Account & Lists <i class="fas fa-caret-down"></i></span>
+                <div class="nav-item account" onclick="openAuthModal()" id="nav-account">
+                    <span class="nav-line-1" id="nav-greeting">Hello, Sign in</span>
+                    <span class="nav-line-2" id="nav-account-text">Account & Lists <i class="fas fa-caret-down"></i></span>
                 </div>
                 <div class="nav-item wishlist-nav" onclick="toggleWishlistPage()">
                     <i class="fas fa-heart"></i>
@@ -337,6 +337,39 @@
             <p><span id="footer-year">2024</span> Amazon Clone. All rights reserved.</p>
         </div>
     </footer>
+
+    <div class="modal-overlay" id="auth-modal" onclick="closeAuthModal(event)">
+        <div class="auth-modal" onclick="event.stopPropagation()">
+            <button class="auth-close" onclick="closeAuthModal()">&times;</button>
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="auth-tab-signin" onclick="switchAuthTab('signin')">Sign In</button>
+                <button class="auth-tab" id="auth-tab-signup" onclick="switchAuthTab('signup')">Create Account</button>
+            </div>
+            <div id="auth-signin-form">
+                <h3>Sign In</h3>
+                <div class="auth-error" id="auth-signin-error"></div>
+                <label>Email</label>
+                <input type="email" id="signin-email" placeholder="Enter your email" autocomplete="email">
+                <label>Password</label>
+                <input type="password" id="signin-password" placeholder="Enter your password" autocomplete="current-password">
+                <button class="auth-submit" onclick="signIn()">Sign In</button>
+                <p class="auth-toggle-text">New here? <a href="#" onclick="switchAuthTab('signup')">Create an account</a></p>
+            </div>
+            <div id="auth-signup-form" style="display:none">
+                <h3>Create Account</h3>
+                <div class="auth-error" id="auth-signup-error"></div>
+                <label>Your name</label>
+                <input type="text" id="signup-name" placeholder="First and last name" autocomplete="name">
+                <label>Email</label>
+                <input type="email" id="signup-email" placeholder="Enter your email" autocomplete="email">
+                <label>Password</label>
+                <input type="password" id="signup-password" placeholder="At least 4 characters" autocomplete="new-password">
+                <button class="auth-submit" onclick="signUp()">Create your Amazon account</button>
+                <p class="auth-toggle-text">Already have an account? <a href="#" onclick="switchAuthTab('signin')">Sign in</a></p>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js" defer></script>
 </body>
 </html>

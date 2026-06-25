@@ -2457,3 +2457,123 @@ img {
         right: 16px;
     }
 }
+
+/* Auth Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 10001;
+    align-items: center;
+    justify-content: center;
+}
+.auth-modal {
+    background: #fff;
+    border-radius: 8px;
+    width: 400px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 32px 28px;
+    position: relative;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+}
+.auth-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #666;
+    line-height: 1;
+}
+.auth-close:hover { color: #111; }
+.auth-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #eee;
+}
+.auth-tab {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #888;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.auth-tab.active {
+    color: var(--amazon-link);
+    border-bottom-color: var(--amazon-link);
+}
+#auth-signin-form h3,
+#auth-signup-form h3 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: var(--text-dark);
+}
+.auth-modal label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    margin: 12px 0 4px;
+    color: var(--text-dark);
+}
+.auth-modal input[type="text"],
+.auth-modal input[type="email"],
+.auth-modal input[type="password"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
+    transition: var(--transition);
+}
+.auth-modal input:focus {
+    border-color: var(--amazon-orange);
+    box-shadow: 0 0 4px rgba(254,189,105,0.5);
+}
+.auth-submit {
+    width: 100%;
+    padding: 10px;
+    margin-top: 18px;
+    background: var(--amazon-yellow);
+    border: 1px solid #a88734;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.auth-submit:hover {
+    background: #f0c14b;
+}
+.auth-error {
+    color: var(--error-red);
+    font-size: 13px;
+    margin-bottom: 8px;
+    min-height: 0;
+}
+.auth-toggle-text {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--text-gray);
+}
+.auth-toggle-text a {
+    color: var(--amazon-link);
+    text-decoration: none;
+}
+.auth-toggle-text a:hover {
+    color: var(--amazon-link-hover);
+    text-decoration: underline;
+}

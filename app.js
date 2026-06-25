@@ -139,6 +139,7 @@ async function initializeApp() {
     initSlider();
     initSliderDots();
     initEventListeners();
+    checkAuth();
 }
 
 async function fetchProducts() {
@@ -998,3 +999,122 @@ window.toggleWishlist = toggleWishlist;
 window.submitReview = submitReview;
 window.toggleWishlistPage = toggleWishlistPage;
 window.removeFromWishlist = removeFromWishlist;
+
+// --- Auth ---
+
+async function checkAuth() {
+    try {
+        const r = await fetch(`${API_BASE}/api/user`);
+        const data = await r.json();
+        if (data.user) {
+            const el = document.getElementById('nav-greeting');
+            if (el) el.textContent = 'Hello, ' + data.user.name;
+            const acc = document.getElementById('nav-account');
+            if (acc) acc.onclick = () => openAuthModal();
+        }
+    } catch {}
+}
+
+function openAuthModal() {
+    const overlay = document.getElementById('auth-modal');
+    if (overlay) overlay.style.display = 'flex';
+}
+
+function closeAuthModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const overlay = document.getElementById('auth-modal');
+    if (overlay) overlay.style.display = 'none';
+    const err1 = document.getElementById('auth-signin-error');
+    const err2 = document.getElementById('auth-signup-error');
+    if (err1) err1.textContent = '';
+    if (err2) err2.textContent = '';
+}
+
+function switchAuthTab(tab) {
+    const signinForm = document.getElementById('auth-signin-form');
+    const signupForm = document.getElementById('auth-signup-form');
+    const tabSignin = document.getElementById('auth-tab-signin');
+    const tabSignup = document.getElementById('auth-tab-signup');
+    if (tab === 'signin') {
+        signinForm.style.display = '';
+        signupForm.style.display = 'none';
+        tabSignin.classList.add('active');
+        tabSignup.classList.remove('active');
+    } else {
+        signinForm.style.display = 'none';
+        signupForm.style.display = '';
+        tabSignin.classList.remove('active');
+        tabSignup.classList.add('active');
+    }
+    const err1 = document.getElementById('auth-signin-error');
+    const err2 = document.getElementById('auth-signup-error');
+    if (err1) err1.textContent = '';
+    if (err2) err2.textContent = '';
+}
+
+async function signIn() {
+    const email = document.getElementById('signin-email').value.trim();
+    const password = document.getElementById('signin-password').value;
+    const errorEl = document.getElementById('auth-signin-error');
+    if (!email || !password) {
+        errorEl.textContent = 'Please enter your email and password';
+        return;
+    }
+    try {
+        const r = await fetch(`${API_BASE}/api/login`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password})
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            errorEl.textContent = data.error || 'Login failed';
+            return;
+        }
+        closeAuthModal();
+        const el = document.getElementById('nav-greeting');
+        if (el) el.textContent = 'Hello, ' + data.user.name;
+        showToast('Signed in as ' + data.user.name);
+    } catch {
+        errorEl.textContent = 'Connection error. Please try again.';
+    }
+}
+
+async function signUp() {
+    const name = document.getElementById('signup-name').value.trim();
+    const email = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
+    const errorEl = document.getElementById('auth-signup-error');
+    if (!name || !email || !password) {
+        errorEl.textContent = 'Please fill in all fields';
+        return;
+    }
+    if (password.length < 4) {
+        errorEl.textContent = 'Password must be at least 4 characters';
+        return;
+    }
+    try {
+        const r = await fetch(`${API_BASE}/api/signup`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, email, password})
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            errorEl.textContent = data.error || 'Sign up failed';
+            return;
+        }
+        closeAuthModal();
+        const el = document.getElementById('nav-greeting');
+        if (el) el.textContent = 'Hello, ' + data.user.name;
+        showToast('Account created! Welcome, ' + data.user.name);
+    } catch {
+        errorEl.textContent = 'Connection error. Please try again.';
+    }
+}
+
+window.openAuthModal = openAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.switchAuthTab = switchAuthTab;
+window.signIn = signIn;
+window.signUp = signUp;

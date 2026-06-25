@@ -3,15 +3,17 @@ Amazon Clone — Python Flask Backend
 Provides REST API for products, cart, checkout, reviews, wishlist, and admin.
 """
 
+import hashlib
 import json
 import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, g, jsonify, request, send_from_directory, render_template_string
+from flask import Flask, g, jsonify, request, send_from_directory, render_template_string, session
 
 app = Flask(__name__, static_folder=None)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "amazon-clone-dev-secret-key-change-in-production")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "amazon.db")
 SEED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.sql")
@@ -98,6 +100,14 @@ def init_db():
             PRIMARY KEY (session_id, product_id)
         );
 
+        CREATE TABLE IF NOT EXISTS users (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            email       TEXT    NOT NULL UNIQUE,
+            password    TEXT    NOT NULL,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
     """)
     # Add status column if not present
     try:
@@ -125,6 +135,71 @@ def init_db():
 @app.route("/api/health")
 def health():
     return jsonify({"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()})
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+@app.route("/api/signup", methods=["POST"])
+def signup():
+    data = request.get_json()
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not name or not email or not password:
+        return jsonify({"error": "Name, email, and password are required"}), 400
+    if len(password) < 4:
+        return jsonify({"error": "Password must be at least 4 characters"}), 400
+
+    db = get_db()
+    existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    if existing:
+        return jsonify({"error": "An account with this email already exists"}), 409
+
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    cur = db.execute("INSERT INTO users (name, email, password) VALUES (?, ?, ?)", (name, email, pw_hash))
+    db.commit()
+
+    session["user_id"] = cur.lastrowid
+    session["user_name"] = name
+    session["user_email"] = email
+    return jsonify({"user": {"id": cur.lastrowid, "name": name, "email": email}})
+
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    db = get_db()
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    user = db.execute("SELECT id, name, email FROM users WHERE email = ? AND password = ?", (email, pw_hash)).fetchone()
+    if not user:
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    session["user_id"] = user["id"]
+    session["user_name"] = user["name"]
+    session["user_email"] = user["email"]
+    return jsonify({"user": {"id": user["id"], "name": user["name"], "email": user["email"]}})
+
+
+@app.route("/api/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/user", methods=["GET"])
+def get_user():
+    if "user_id" not in session:
+        return jsonify({"user": None})
+    return jsonify({"user": {"id": session["user_id"], "name": session["user_name"], "email": session["user_email"]}})
 
 
 # ---------------------------------------------------------------------------
