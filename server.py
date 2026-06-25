@@ -663,6 +663,109 @@ def admin_page():
 
 
 # ---------------------------------------------------------------------------
+# Chatbot API
+# ---------------------------------------------------------------------------
+
+import re
+import random
+
+FAQ = {
+    "shipping": "We offer free standard shipping on orders over $49. Standard delivery takes 5-8 business days, expedited (2-3 days) is $9.99, and next-day delivery is $14.99.",
+    "return": "You can return most items within 30 days of delivery for a full refund. Items must be in original condition. Start a return from your Orders page or contact customer service.",
+    "payment": "We accept Visa, Mastercard, American Express, PayPal, and Cash on Delivery (COD). All payments are processed securely.",
+    "order": "Track your order from the Returns & Orders section. You'll receive email updates at every step. Most orders ship within 24 hours.",
+    "warranty": "All electronics come with a 1-year manufacturer warranty. Kitchen appliances have a 2-year warranty. Extended warranty plans are available at checkout.",
+    "account": "Create an account by clicking 'Hello, Sign in' at the top. You can manage your orders, wishlist, and payment methods from your account dashboard."
+}
+
+PRODUCT_CATEGORIES = {
+    "electronics": "We have top electronics: iPhone 15 Pro Max ($1199), Sony WH-1000XM5 headphones ($328), Samsung 65\" OLED TV ($1797.99), and MacBook Pro 14\" ($1999).",
+    "fashion": "Our fashion collection includes Levi's 501 jeans ($49.50), Nike Air Max 270 ($150), and North Face Thermoball jackets ($179).",
+    "home": "For home & kitchen: Instant Pot Duo ($79.95), Dyson V15 Detect ($649.99), and KitchenAid Artisan Mixer ($379.99).",
+    "books": "Bestselling books: Atomic Habits by James Clear ($14.99) and The Psychology of Money ($13.79)."
+}
+
+INTENTS = [
+    (r"(?i)\b(hello|hi|hey|howdy)\b", lambda _: "Hello! Welcome to Amazon Clone. How can I help you today? You can ask me about products, shipping, returns, or just browse the store!"),
+    (r"(?i)\b(help|what can you do)\b", lambda _: "I can help you with:\n• Finding products - ask about any category\n• Order info - track, shipping, returns\n• Payment methods\n• Product recommendations\nJust ask me anything!"),
+    (r"(?i)\b(shipping|delivery|ship|deliver|free shipping)\b", lambda _: FAQ["shipping"]),
+    (r"(?i)\b(return|refund|exchange|replace)\b", lambda _: FAQ["return"]),
+    (r"(?i)\b(pay|payment|credit card|debit card|cash on delivery|up|visa|mastercard|paypal|cod)\b", lambda _: FAQ["payment"]),
+    (r"(?i)\b(track|order status|where is my order|shipping status)\b", lambda _: FAQ["order"]),
+    (r"(?i)\b(warranty|guarantee)\b", lambda _: FAQ["warranty"]),
+    (r"(?i)\b(account|sign in|login|register|create account)\b", lambda _: FAQ["account"]),
+    (r"(?i)\b(electronics|phone|iphone|laptop|macbook|tv|headphone|gadget|computer)\b", lambda _: PRODUCT_CATEGORIES["electronics"] + " Would you like me to recommend one?"),
+    (r"(?i)\b(fashion|clothes|jeans|shoes|nike|levi|jacket|north face)\b", lambda _: PRODUCT_CATEGORIES["fashion"] + " Interested in any of these?"),
+    (r"(?i)\b(home|kitchen|mixer|vacuum|instant pot|dyson|cooker|kitchenaid)\b", lambda _: PRODUCT_CATEGORIES["home"] + " Would you like more details on any product?"),
+    (r"(?i)\b(book|atomic habits|psychology of money|read|bestseller)\b", lambda _: PRODUCT_CATEGORIES["books"]),
+    (r"(?i)\b(deals|discount|sale|offer|promo|coupon)\b", lambda _: "Check out our Today's Deals section on the homepage! We have discounts on electronics, fashion, home goods, and more. Also check the Deal of the Day banner for extra savings."),
+    (r"(?i)\b(cart|checkout|buy|purchase|order)\b", lambda _: "To buy something, click 'Add to Cart' on any product, then proceed to checkout. You can review your cart by clicking the cart icon at the top right."),
+    (r"(?i)\b(thank|thanks|appreciate)\b", lambda _: "You're welcome! Happy shopping! 🎉 Is there anything else I can help you with?"),
+    (r"(?i)\b(best.?seller|popular|top rated|recommend)\b", lambda _: "Our bestsellers right now: iPhone 15 Pro Max ⭐4.8, KitchenAid Mixer ⭐4.9, and Atomic Habits ⭐4.8. What kind of product are you looking for?"),
+    (r"(?i)\b(price|cost|how much)\b", lambda _: "Prices range from $13.79 for books to $1999 for the MacBook Pro. You can sort products by price using the dropdown on the products page. Tap any product for full details."),
+    (r"(?i)\b(review|rating|star)\b", lambda _: "All our products have customer ratings. Top-rated: KitchenAid Mixer (⭐4.9), MacBook Pro (⭐4.9), and iPhone 15 Pro Max (⭐4.8). You can read and write reviews by opening any product's quick view."),
+    (r"(?i)\b(wishlist|save|favorite|heart)\b", lambda _: "Click the heart icon on any product to add it to your wishlist. View your wishlist by clicking the heart icon in the top navigation bar."),
+    (r"(?i)\b(contact|customer service|support|agent|human)\b", lambda _: "You can reach customer service at support@amazon-clone.com or call 1-800-AMAZON. Our team is available 24/7."),
+]
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    data = request.get_json(silent=True)
+    if not data or "message" not in data:
+        return jsonify({"response": "Please send a message."}), 400
+    msg = data["message"].strip()
+    if not msg:
+        return jsonify({"response": "Please type a question!"})
+
+    # Check for product-specific queries
+    db = get_db()
+    products = db.execute("SELECT id, title, price, category FROM products").fetchall()
+    product_hits = [p for p in products if any(word in msg.lower() for word in p["title"].lower().split())]
+    
+    if product_hits:
+        hits = product_hits[:3]
+        lines = []
+        for p in hits:
+            pid = str(p["id"])
+            title = p["title"]
+            price = p["price"]
+            lines.append(f'<a href="#" onclick="openQuickView({pid});event.preventDefault()">{title}</a> — ${price:.2f}')
+        response = "I found these products for you:<br>" + "<br>".join(lines)
+        return jsonify({"response": response})
+
+    # Check intents
+    for pattern, handler in INTENTS:
+        if re.search(pattern, msg):
+            response = handler(None)
+            return jsonify({"response": response})
+
+    # Fallback - search products more broadly
+    words = msg.lower().split()
+    matches = [p for p in products if any(w in p["title"].lower() for w in words)]
+    if matches:
+        hits = matches[:3]
+        lines = []
+        for p in hits:
+            pid = str(p["id"])
+            title = p["title"]
+            price = p["price"]
+            lines.append(f'<a href="#" onclick="openQuickView({pid});event.preventDefault()">{title}</a> — ${price:.2f}')
+        response = "Here are some products you might be interested in:<br>" + "<br>".join(lines)
+    elif any(w in msg.lower() for w in ["what", "which", "tell", "show", "find", "search", "looking for", "recommend"]):
+        response = "I can help you find products! Try asking about a category (electronics, fashion, home, books) or a specific product name. What are you looking for?"
+    else:
+        fallbacks = [
+            "That's an interesting question! I can help with product searches, shipping info, returns, and more. Try asking 'What electronics do you have?' or 'What's your return policy?'",
+            "I'm not sure I understood that. Try asking about a specific product, category, or check our FAQ on shipping, returns, or payments!",
+            "Hmm, I don't have a great answer for that. Here are some things I can help with:\n• 'Show me electronics'\n• 'What's the return policy?'\n• 'Recommend a bestseller'\n• 'How much is the KitchenAid mixer?'"
+        ]
+        response = random.choice(fallbacks)
+
+    return jsonify({"response": response})
+
+
+# ---------------------------------------------------------------------------
 # Serve frontend (index.html, app.js, style.css)
 # ---------------------------------------------------------------------------
 

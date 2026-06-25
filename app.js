@@ -928,6 +928,64 @@ function debounce(func, wait) {
     };
 }
 
+function toggleChat() {
+    const panel = getById('chat-panel');
+    const btn = getById('chat-button');
+    if (panel) {
+        panel.classList.toggle('open');
+        if (panel.classList.contains('open')) {
+            setTimeout(() => getById('chat-input')?.focus(), 300);
+            btn.style.display = 'none';
+        } else {
+            btn.style.display = 'flex';
+        }
+    }
+}
+
+async function sendChat() {
+    const input = getById('chat-input');
+    const msg = input?.value.trim();
+    if (!msg) return;
+    input.value = '';
+    input.disabled = true;
+
+    const msgs = getById('chat-messages');
+    msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg user"><div class="msg-content">${escapeHtml(msg)}</div></div>`);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    const thinkingId = 'thinking-' + Date.now();
+    msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg bot" id="${thinkingId}"><div class="msg-content"><i class="fas fa-spinner fa-spin"></i> Thinking...</div></div>`);
+
+    try {
+        const res = await fetch(`${API_BASE}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        const el = getById(thinkingId);
+        if (el) {
+            el.outerHTML = `<div class="chat-msg bot"><div class="msg-content">${data.response}</div></div>`;
+        }
+    } catch {
+        const el = getById(thinkingId);
+        if (el) {
+            el.outerHTML = `<div class="chat-msg bot"><div class="msg-content">Sorry, I'm having trouble connecting. Please try again later.</div></div>`;
+        }
+    }
+
+    input.disabled = false;
+    input.focus();
+}
+
+function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+window.toggleChat = toggleChat;
+window.sendChat = sendChat;
 window.addToCart = addToCart;
 window.removeFromCart = removeFromCart;
 window.updateQuantity = updateQuantity;
