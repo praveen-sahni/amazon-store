@@ -6,14 +6,38 @@ Provides REST API for products, cart, checkout, reviews, wishlist, and admin.
 import hashlib
 import json
 import os
+import re
+import random
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, g, jsonify, request, send_from_directory, render_template_string, session
+from flask import Flask, g, jsonify, request, send_from_directory, session
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__, static_folder=None)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "amazon-clone-dev-secret-key-change-in-production")
+
+# Rate limiting
+app.config["RATELIMIT_ENABLED"] = os.environ.get("RATELIMIT_ENABLED", "true").lower() == "true"
+app.config["RATELIMIT_DEFAULT"] = os.environ.get("RATELIMIT_DEFAULT", "200 per minute")
+
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=[app.config["RATELIMIT_DEFAULT"]],
+        enabled=app.config["RATELIMIT_ENABLED"],
+    )
+except ImportError:
+    limiter = None
+
+# CSRF protection for state-changing requests
+CSRF_ENABLED = os.environ.get("CSRF_ENABLED", "true").lower() == "true"
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "amazon.db")
 SEED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.sql")
@@ -108,12 +132,112 @@ def init_db():
             created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS coupons (
+            code            TEXT PRIMARY KEY,
+            discount_type   TEXT NOT NULL CHECK(discount_type IN ('percent','fixed')),
+            discount_value  REAL NOT NULL,
+            min_cart_value  REAL NOT NULL DEFAULT 0,
+            usage_limit     INTEGER NOT NULL DEFAULT 100,
+            times_used      INTEGER NOT NULL DEFAULT 0,
+            expires_at      TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS price_history (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            price       REAL NOT NULL,
+            recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS wishlist_shares (
+            token       TEXT PRIMARY KEY,
+            session_id  TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS flash_sales (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            sale_price  REAL NOT NULL,
+            ends_at     TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS product_qa (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            session_id  TEXT NOT NULL,
+            author_name TEXT NOT NULL DEFAULT 'Anonymous',
+            question    TEXT NOT NULL,
+            answer      TEXT DEFAULT '',
+            answered_at TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS gift_cards (
+            code        TEXT PRIMARY KEY,
+            amount      REAL NOT NULL,
+            redeemed    INTEGER NOT NULL DEFAULT 0,
+            session_id  TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
     """)
     # Add status column if not present
     try:
         db.execute("ALTER TABLE customer_orders ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'")
     except sqlite3.OperationalError:
         pass
+    # Add tracking_code column if not present
+    try:
+        db.execute("ALTER TABLE customer_orders ADD COLUMN tracking_code TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    # Add tracking_updates column if not present
+    try:
+        db.execute("ALTER TABLE customer_orders ADD COLUMN tracking_updates TEXT DEFAULT '[]'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute("ALTER TABLE products ADD COLUMN stock INTEGER NOT NULL DEFAULT 50")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute("ALTER TABLE products ADD COLUMN images TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute("ALTER TABLE products ADD COLUMN variants TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    # Seed flash sales
+    fs_count = db.execute("SELECT COUNT(*) FROM flash_sales").fetchone()[0]
+    if fs_count == 0:
+        fs_rows = db.execute("SELECT id, price FROM products ORDER BY RANDOM() LIMIT 4").fetchall()
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        for fp in fs_rows:
+            sale_price = round(fp[1] * 0.7, 2)  # fp[0]=id, fp[1]=price
+            ends_at = (now + timedelta(hours=random.randint(4, 48))).strftime("%Y-%m-%d %H:%M:%S")
+            db.execute("INSERT INTO flash_sales (product_id, sale_price, ends_at) VALUES (?, ?, ?)",
+                       (fp[0], sale_price, ends_at))
+        db.commit()
+    # Seed coupons
+    coupon_count = db.execute("SELECT COUNT(*) FROM coupons").fetchone()[0]
+    if coupon_count == 0:
+        coupons = [
+            ("WELCOME10", "percent", 10, 20, 100, "2027-12-31"),
+            ("SAVE50", "fixed", 50, 100, 50, "2027-12-31"),
+            ("SUMMER20", "percent", 20, 50, 200, "2026-09-30"),
+            ("FREESHIP", "fixed", 15, 30, 500, "2026-12-31"),
+        ]
+        for c in coupons:
+            db.execute(
+                "INSERT INTO coupons (code, discount_type, discount_value, min_cart_value, usage_limit, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+                c,
+            )
+        db.commit()
     # Seed products if table is empty
     count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
     if count == 0 and os.path.isfile(SEED_PATH):
@@ -125,6 +249,39 @@ def init_db():
                 db.execute(stmt)
         db.commit()
     db.close()
+
+
+# ---------------------------------------------------------------------------
+# CSRF / Security helpers
+# ---------------------------------------------------------------------------
+
+def require_csrf():
+    """Simple CSRF check: require X-Requested-With header or skip for GET/HEAD/OPTIONS."""
+    if not CSRF_ENABLED:
+        return
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return
+    # Allow same-origin (no Origin header or same origin)
+    origin = request.headers.get("Origin", "")
+    if not origin or origin == request.host_url.rstrip("/"):
+        return
+    # Also allow requests with no Referer
+    referer = request.headers.get("Referer", "")
+    if not referer:
+        return
+    # Check referer matches host
+    if request.host_url.rstrip("/") in referer:
+        return
+    return jsonify({"error": "CSRF check failed"}), 403
+
+
+@app.before_request
+def before_request():
+    resp = require_csrf()
+    if resp:
+        return resp
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +299,7 @@ def health():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/signup", methods=["POST"])
+@limiter.limit("10 per minute") if limiter else lambda f: f
 def signup():
     data = request.get_json()
     name = (data.get("name") or "").strip()
@@ -169,6 +327,7 @@ def signup():
 
 
 @app.route("/api/login", methods=["POST"])
+@limiter.limit("20 per minute") if limiter else lambda f: f
 def login():
     data = request.get_json()
     email = (data.get("email") or "").strip().lower()
@@ -222,6 +381,9 @@ def row_to_product(row):
         "badge": row["badge"],
         "description": row["description"],
         "features": features,
+        "stock": row["stock"],
+        "images": json.loads(row["images"]) if row["images"] else [],
+        "variants": json.loads(row["variants"]) if row["variants"] else [],
     }
 
 
@@ -232,8 +394,19 @@ def row_to_product(row):
 @app.route("/api/products", methods=["GET"])
 def list_products():
     db = get_db()
-    rows = db.execute("SELECT * FROM products ORDER BY id").fetchall()
-    return jsonify([row_to_product(r) for r in rows])
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 100, type=int)
+    per_page = min(per_page, 100)
+    offset = (page - 1) * per_page
+    rows = db.execute("SELECT * FROM products ORDER BY id LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
+    total = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+    return jsonify({
+        "products": [row_to_product(r) for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page,
+    })
 
 
 @app.route("/api/products/<int:product_id>", methods=["GET"])
@@ -258,6 +431,19 @@ def products_by_category(category):
 @app.route("/api/products/deal", methods=["GET"])
 def deal_of_day():
     db = get_db()
+    # Check for active flash sales first
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    flash = db.execute(
+        "SELECT fs.*, p.* FROM flash_sales fs JOIN products p ON p.id = fs.product_id "
+        "WHERE fs.ends_at > ? ORDER BY fs.ends_at ASC LIMIT 1",
+        (now_str,),
+    ).fetchone()
+    if flash:
+        product = dict(flash)
+        product["sale_price"] = flash["sale_price"]
+        product["ends_at"] = flash["ends_at"]
+        product["badge"] = "flash-sale"
+        return jsonify({**row_to_product(flash), "flashSale": {"salePrice": flash["sale_price"], "endsAt": flash["ends_at"]}})
     row = db.execute(
         "SELECT * FROM products WHERE LOWER(badge) = 'deal' ORDER BY id LIMIT 1"
     ).fetchone()
@@ -315,6 +501,7 @@ def cart_clear(session_id):
 # ---------------------------------------------------------------------------
 
 @app.route("/api/cart/<session_id>/checkout", methods=["POST"])
+@limiter.limit("10 per minute") if limiter else lambda f: f
 def checkout(session_id):
     body = request.get_json(silent=True) or {}
     items = body.get("items", [])
@@ -342,6 +529,12 @@ def checkout(session_id):
             title = row["title"]
             image = row["image"]
 
+        # Check stock
+        stock_row = db.execute("SELECT stock FROM products WHERE id = ?", (pid,)).fetchone()
+        avail = stock_row["stock"] if stock_row else 0
+        if qty > avail:
+            return jsonify({"error": f"Insufficient stock for {title}. Available: {avail}"}), 400
+
         line_total = price * qty
         total += line_total
         resolved_items.append(
@@ -354,11 +547,39 @@ def checkout(session_id):
             }
         )
 
+    # Apply coupon discount if provided
+    coupon_code = body.get("couponCode", "").strip().upper()
+    discount_amount = 0.0
+    if coupon_code:
+        coupon = db.execute("SELECT * FROM coupons WHERE code = ?", (coupon_code,)).fetchone()
+        if coupon and coupon["times_used"] < coupon["usage_limit"]:
+            if total >= coupon["min_cart_value"]:
+                if coupon["discount_type"] == "percent":
+                    discount_amount = round(total * coupon["discount_value"] / 100, 2)
+                else:
+                    discount_amount = min(coupon["discount_value"], total)
+                total = round(total - discount_amount, 2)
+                db.execute("UPDATE coupons SET times_used = times_used + 1 WHERE code = ?", (coupon_code,))
+
+    # Apply gift card
+    gift_card_code = body.get("giftCardCode", "").strip().upper()
+    gift_discount = 0.0
+    if gift_card_code:
+        gc = db.execute("SELECT * FROM gift_cards WHERE code = ? AND redeemed = 0", (gift_card_code,)).fetchone()
+        if gc:
+            gift_discount = min(gc["amount"], total)
+            total = round(total - gift_discount, 2)
+            db.execute("UPDATE gift_cards SET redeemed = 1 WHERE code = ?", (gift_card_code,))
+
     order_id = f"ORD-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{uuid.uuid4().hex[:6].upper()}"
+    tracking_code = f"TRK-{uuid.uuid4().hex[:8].upper()}"
+    tracking_updates = [
+        {"status": "confirmed", "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), "message": "Order confirmed"}
+    ]
 
     db.execute(
-        "INSERT INTO customer_orders (order_id, session_id, customer_name, email, address, payment_method, total, item_count) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO customer_orders (order_id, session_id, customer_name, email, address, payment_method, total, item_count, tracking_code, tracking_updates) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             order_id,
             session_id,
@@ -368,6 +589,8 @@ def checkout(session_id):
             body.get("paymentMethod", "card"),
             round(total, 2),
             len(resolved_items),
+            tracking_code,
+            json.dumps(tracking_updates),
         ),
     )
 
@@ -383,6 +606,14 @@ def checkout(session_id):
                 ri["image"],
             ),
         )
+        # Record price history for each purchased product
+        db.execute(
+            "INSERT INTO price_history (product_id, price) VALUES (?, ?)",
+            (ri["product_id"], ri["price"]),
+        )
+        # Decrement stock
+        db.execute("UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?",
+                   (ri["quantity"], ri["product_id"]))
 
     db.commit()
 
@@ -397,6 +628,9 @@ def checkout(session_id):
             "itemCount": len(resolved_items),
             "paymentMethod": body.get("paymentMethod", "card"),
             "customerName": body.get("customerName", ""),
+            "trackingCode": tracking_code,
+            "couponDiscount": discount_amount,
+            "giftCardDiscount": gift_discount,
         }
     )
 
@@ -408,7 +642,14 @@ def checkout(session_id):
 @app.route("/api/orders", methods=["GET"])
 def list_orders():
     db = get_db()
-    rows = db.execute("SELECT * FROM customer_orders ORDER BY created_at DESC").fetchall()
+    session_id = request.args.get("session_id")
+    if session_id:
+        rows = db.execute(
+            "SELECT * FROM customer_orders WHERE session_id = ? ORDER BY created_at DESC",
+            (session_id,),
+        ).fetchall()
+    else:
+        rows = db.execute("SELECT * FROM customer_orders ORDER BY created_at DESC").fetchall()
     return jsonify(
         [
             {
@@ -419,6 +660,9 @@ def list_orders():
                 "paymentMethod": r["payment_method"],
                 "itemCount": r["item_count"],
                 "createdAt": r["created_at"],
+                "status": r["status"],
+                "trackingCode": r["tracking_code"] or "",
+                "trackingUpdates": json.loads(r["tracking_updates"]) if r["tracking_updates"] else [],
             }
             for r in rows
         ]
@@ -444,6 +688,9 @@ def get_order(order_id):
             "total": row["total"],
             "itemCount": row["item_count"],
             "createdAt": row["created_at"],
+            "status": row["status"],
+            "trackingCode": row["tracking_code"] or "",
+            "trackingUpdates": json.loads(row["tracking_updates"]) if row["tracking_updates"] else [],
             "items": [
                 {
                     "productId": i["product_id"],
@@ -557,6 +804,122 @@ def wishlist_check(session_id, product_id):
 # Routes — Related Products
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Routes — Coupons
+# ---------------------------------------------------------------------------
+
+@app.route("/api/coupons/validate", methods=["POST"])
+def validate_coupon():
+    body = request.get_json(silent=True) or {}
+    code = body.get("code", "").strip().upper()
+    cart_total = body.get("cartTotal", 0)
+    if not code:
+        return jsonify({"valid": False, "error": "Please enter a coupon code"})
+    db = get_db()
+    coupon = db.execute("SELECT * FROM coupons WHERE code = ?", (code,)).fetchone()
+    if not coupon:
+        return jsonify({"valid": False, "error": "Invalid coupon code"})
+    if coupon["times_used"] >= coupon["usage_limit"]:
+        return jsonify({"valid": False, "error": "This coupon has expired"})
+    if coupon["expires_at"] and coupon["expires_at"] < datetime.now(timezone.utc).strftime("%Y-%m-%d"):
+        return jsonify({"valid": False, "error": "This coupon has expired"})
+    if cart_total < coupon["min_cart_value"]:
+        return jsonify({"valid": False, "error": f"Minimum cart value of ${coupon['min_cart_value']:.2f} required"})
+    if coupon["discount_type"] == "percent":
+        discount = round(cart_total * coupon["discount_value"] / 100, 2)
+        desc = f"{coupon['discount_value']:.0f}% off"
+    else:
+        discount = min(coupon["discount_value"], cart_total)
+        desc = f"${coupon['discount_value']:.0f} off"
+    return jsonify({"valid": True, "code": coupon["code"], "discount": discount, "description": desc})
+
+
+# ---------------------------------------------------------------------------
+# Routes — Price History
+# ---------------------------------------------------------------------------
+
+@app.route("/api/products/<int:product_id>/price-history", methods=["GET"])
+def price_history(product_id):
+    db = get_db()
+    rows = db.execute(
+        "SELECT price, recorded_at FROM price_history WHERE product_id = ? ORDER BY recorded_at ASC",
+        (product_id,),
+    ).fetchall()
+    # Also include current price
+    product = db.execute("SELECT price FROM products WHERE id = ?", (product_id,)).fetchone()
+    current_price = product["price"] if product else 0
+    return jsonify({
+        "currentPrice": current_price,
+        "history": [{"price": r["price"], "date": r["recorded_at"]} for r in rows],
+    })
+
+
+@app.route("/api/products/<int:product_id>/record-price", methods=["POST"])
+def record_price(product_id):
+    db = get_db()
+    product = db.execute("SELECT price FROM products WHERE id = ?", (product_id,)).fetchone()
+    if not product:
+        return jsonify({"error": "Not found"}), 404
+    db.execute("INSERT INTO price_history (product_id, price) VALUES (?, ?)", (product_id, product["price"]))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Routes — Recommendations (Customers Also Bought)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/products/<int:product_id>/also-bought", methods=["GET"])
+def also_bought(product_id):
+    db = get_db()
+    # Find orders containing this product
+    order_ids = db.execute(
+        "SELECT DISTINCT oi.order_id FROM order_items oi WHERE oi.product_id = ?", (product_id,)
+    ).fetchall()
+    if not order_ids:
+        return jsonify([])
+    ids = [r["order_id"] for r in order_ids]
+    placeholders = ",".join("?" for _ in ids)
+    # Find other products in those orders
+    rows = db.execute(
+        f"SELECT p.*, COUNT(*) as bought_together FROM order_items oi "
+        f"JOIN products p ON p.id = oi.product_id "
+        f"WHERE oi.order_id IN ({placeholders}) AND oi.product_id != ? "
+        f"GROUP BY oi.product_id ORDER BY bought_together DESC LIMIT 6",
+        (*ids, product_id),
+    ).fetchall()
+    return jsonify([row_to_product(r) for r in rows])
+
+
+# ---------------------------------------------------------------------------
+# Routes — Wishlist Sharing
+# ---------------------------------------------------------------------------
+
+@app.route("/api/wishlist/<session_id>/share", methods=["GET"])
+def wishlist_share_generate(session_id):
+    db = get_db()
+    token = uuid.uuid4().hex[:12]
+    db.execute("INSERT INTO wishlist_shares (token, session_id) VALUES (?, ?)", (token, session_id))
+    db.commit()
+    return jsonify({"token": token, "url": f"/shared/wishlist/{token}"})
+
+
+@app.route("/api/wishlist/share/<token>", methods=["GET"])
+def wishlist_share_view(token):
+    db = get_db()
+    share = db.execute("SELECT * FROM wishlist_shares WHERE token = ?", (token,)).fetchone()
+    if not share:
+        return jsonify({"error": "Shared wishlist not found"}), 404
+    rows = db.execute(
+        """SELECT p.* FROM wishlists w
+           JOIN products p ON p.id = w.product_id
+           WHERE w.session_id = ?
+           ORDER BY w.added_at DESC""",
+        (share["session_id"],),
+    ).fetchall()
+    return jsonify({"sessionId": share["session_id"], "products": [row_to_product(r) for r in rows]})
+
+
 @app.route("/api/products/<int:product_id>/related", methods=["GET"])
 def related_products(product_id):
     db = get_db()
@@ -568,6 +931,159 @@ def related_products(product_id):
         (product["category"], product_id),
     ).fetchall()
     return jsonify([row_to_product(r) for r in rows])
+
+
+# ---------------------------------------------------------------------------
+# Routes — Flash Sales
+# ---------------------------------------------------------------------------
+
+@app.route("/api/flash-sales", methods=["GET"])
+def list_flash_sales():
+    db = get_db()
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    rows = db.execute(
+        "SELECT fs.*, p.* FROM flash_sales fs JOIN products p ON p.id = fs.product_id "
+        "WHERE fs.ends_at > ? ORDER BY fs.ends_at ASC", (now_str,)
+    ).fetchall()
+    result = []
+    for r in rows:
+        p = row_to_product(r)
+        p["flashSale"] = {"salePrice": r["sale_price"], "endsAt": r["ends_at"]}
+        result.append(p)
+    return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
+# Routes — Product Q&A
+# ---------------------------------------------------------------------------
+
+@app.route("/api/products/<int:product_id>/qa", methods=["GET"])
+def list_qa(product_id):
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM product_qa WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+    ).fetchall()
+    return jsonify([
+        {
+            "id": r["id"],
+            "authorName": r["author_name"],
+            "question": r["question"],
+            "answer": r["answer"],
+            "createdAt": r["created_at"],
+            "answeredAt": r["answered_at"],
+        }
+        for r in rows
+    ])
+
+
+@app.route("/api/products/<int:product_id>/qa", methods=["POST"])
+def add_qa(product_id):
+    db = get_db()
+    body = request.get_json(silent=True) or {}
+    question = (body.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "Question is required"}), 400
+    author = (body.get("authorName") or "Anonymous").strip()
+    session_id = body.get("session_id", "anonymous")
+    db.execute(
+        "INSERT INTO product_qa (product_id, session_id, author_name, question) VALUES (?, ?, ?, ?)",
+        (product_id, session_id, author, question),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/products/<int:product_id>/qa/<int:qa_id>/answer", methods=["POST"])
+def answer_qa(product_id, qa_id):
+    db = get_db()
+    body = request.get_json(silent=True) or {}
+    answer = (body.get("answer") or "").strip()
+    if not answer:
+        return jsonify({"error": "Answer is required"}), 400
+    db.execute(
+        "UPDATE product_qa SET answer = ?, answered_at = datetime('now') WHERE id = ? AND product_id = ?",
+        (answer, qa_id, product_id),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Routes — Gift Cards
+# ---------------------------------------------------------------------------
+
+@app.route("/api/gift-cards/purchase", methods=["POST"])
+def purchase_gift_card():
+    db = get_db()
+    body = request.get_json(silent=True) or {}
+    amount = float(body.get("amount", 0))
+    if amount < 5:
+        return jsonify({"error": "Minimum gift card amount is $5"}), 400
+    session_id = body.get("session_id", "anonymous")
+    code = f"GIFT-{uuid.uuid4().hex[:8].upper()}"
+    db.execute(
+        "INSERT INTO gift_cards (code, amount, session_id) VALUES (?, ?, ?)",
+        (code, amount, session_id),
+    )
+    db.commit()
+    return jsonify({"code": code, "amount": amount})
+
+
+@app.route("/api/gift-cards/validate", methods=["POST"])
+def validate_gift_card():
+    db = get_db()
+    body = request.get_json(silent=True) or {}
+    code = (body.get("code") or "").strip().upper()
+    gc = db.execute("SELECT * FROM gift_cards WHERE code = ? AND redeemed = 0", (code,)).fetchone()
+    if not gc:
+        return jsonify({"valid": False, "error": "Invalid or already redeemed gift card"})
+    return jsonify({"valid": True, "amount": gc["amount"], "code": gc["code"]})
+
+
+# ---------------------------------------------------------------------------
+# Routes — Invoice Download
+# ---------------------------------------------------------------------------
+
+@app.route("/api/orders/<order_id>/invoice", methods=["GET"])
+def order_invoice(order_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM customer_orders WHERE order_id = ?", (order_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    items = db.execute("SELECT * FROM order_items WHERE order_id = ?", (order_id,)).fetchall()
+    invoice_html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+body {{ font-family: Arial, sans-serif; margin: 40px; color: #333; }}
+.invoice-header {{ text-align: center; margin-bottom: 30px; border-bottom: 2px solid #f08804; padding-bottom: 15px; }}
+.invoice-header h1 {{ color: #131921; margin: 0; }}
+.invoice-header p {{ color: #666; margin: 5px 0; }}
+.invoice-details {{ margin-bottom: 20px; }}
+.invoice-details table {{ width: 100%; }}
+.invoice-details td {{ padding: 4px 0; }}
+.items-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+.items-table th {{ background: #f3a847; color: #fff; padding: 10px; text-align: left; }}
+.items-table td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
+.total-row td {{ font-weight: bold; font-size: 16px; }}
+.grand-total {{ font-size: 18px; color: #b12704; }}
+.footer {{ text-align: center; margin-top: 40px; color: #999; font-size: 12px; border-top: 1px solid #ddd; padding-top: 15px; }}
+</style></head><body>
+<div class="invoice-header"><h1>INVOICE</h1><p>Order #{row['order_id']}</p><p>{row['created_at']}</p></div>
+<div class="invoice-details"><table>
+<tr><td><strong>Customer:</strong></td><td>{row['customer_name']}</td></tr>
+<tr><td><strong>Email:</strong></td><td>{row['email']}</td></tr>
+<tr><td><strong>Address:</strong></td><td>{row['address']}</td></tr>
+<tr><td><strong>Payment:</strong></td><td>{row['payment_method']}</td></tr>
+<tr><td><strong>Tracking:</strong></td><td>{row['tracking_code'] or 'N/A'}</td></tr>
+</table></div>
+<table class="items-table"><tr><th>Item</th><th>Price</th><th>Qty</th><th>Total</th></tr>"""
+    for it in items:
+        line = it["price"] * it["quantity"]
+        invoice_html += f"<tr><td>{it['title']}</td><td>${it['price']:.2f}</td><td>{it['quantity']}</td><td>${line:.2f}</td></tr>"
+    invoice_html += f"""</table>
+<table class="items-table"><tr class="total-row"><td colspan="3">Total</td><td class="grand-total">${row['total']:.2f}</td></tr></table>
+<div class="footer"><p>Thank you for shopping with us!</p><p>RTR Store</p></div>
+</body></html>"""
+    return Response(invoice_html, mimetype="text/html")
 
 
 # ---------------------------------------------------------------------------

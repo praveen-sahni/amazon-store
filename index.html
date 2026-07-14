@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="style.css">
     <meta name="api-base-url" content="">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#131921">
 </head>
 <body>
     <header class="header">
@@ -36,17 +38,22 @@
                 </select>
                 <input type="text" id="search-input" placeholder="Search Amazon">
                 <button id="search-btn"><i class="fas fa-search"></i></button>
+                <button id="voice-search-btn" title="Search by voice"><i class="fas fa-microphone"></i></button>
             </div>
             <div class="nav-actions">
-                <div class="nav-item account" onclick="openAuthModal()" id="nav-account">
+                <div class="nav-item dark-mode-toggle" id="dark-mode-toggle" title="Toggle Dark Mode">
+                    <i class="fas fa-moon"></i>
+                </div>
+                <div class="nav-item account" id="nav-account">
                     <span class="nav-line-1" id="nav-greeting">Hello, Sign in</span>
                     <span class="nav-line-2" id="nav-account-text">Account & Lists <i class="fas fa-caret-down"></i></span>
+                    <i class="fas fa-user mobile-account-icon"></i>
                 </div>
-                <div class="nav-item wishlist-nav" onclick="toggleWishlistPage()">
+                <div class="nav-item wishlist-nav" id="wishlist-nav-btn">
                     <i class="fas fa-heart"></i>
                     <span class="wishlist-nav-text">Wishlist</span>
                 </div>
-                <div class="nav-item orders">
+                <div class="nav-item orders" id="nav-orders" onclick="window.toggleOrdersPage()" ontouchstart="window.toggleOrdersPage()">
                     <span class="nav-line-1">Returns</span>
                     <span class="nav-line-2">& Orders</span>
                 </div>
@@ -59,11 +66,13 @@
         </div>
         <nav class="header-bottom">
             <ul class="nav-links">
+                <li class="mobile-signin-first"><a href="javascript:void(0)" id="nav-signin-link" onclick="window.openAuthModal()"><i class="fas fa-user"></i> Sign In</a></li>
+                <li><a href="javascript:void(0)" onclick="window.toggleOrdersPage()"><i class="fas fa-box"></i> Returns & Orders</a></li>
                 <li><a href="#"><i class="fas fa-bars"></i> All</a></li>
                 <li><a href="#">Today's Deals</a></li>
                 <li><a href="#">Customer Service</a></li>
                 <li><a href="#">Registry</a></li>
-                <li><a href="#">Gift Cards</a></li>
+                <li><a href="javascript:void(0)" id="nav-giftcards"><i class="fas fa-gift"></i> Gift Cards</a></li>
                 <li><a href="#">Sell</a></li>
                 <li><a href="/admin"><i class="fas fa-cog"></i> Admin</a></li>
             </ul>
@@ -71,6 +80,14 @@
     </header>
     <div class="share-link-banner" id="share-link-banner">
         Share this page from any device: <span id="share-link-text">Loading URL...</span>
+    </div>
+    <div class="mobile-auth-banner" id="mobile-auth-banner">
+        <span>Welcome! <a href="javascript:void(0)" id="mobile-auth-signin" onclick="window.openAuthModal()">Sign In</a> or <a href="javascript:void(0)" id="mobile-auth-signup" onclick="window.openAuthModal(); setTimeout(function(){ window.switchAuthTab && window.switchAuthTab('signup'); }, 50);">Create Account</a></span>
+    </div>
+    <div class="abandoned-cart-banner" id="abandoned-cart-banner" style="display:none;">
+        <i class="fas fa-shopping-cart"></i>
+        <span>You have items in your cart! <a href="javascript:void(0)" id="cart-restore-link">View Cart</a></span>
+        <button id="dismiss-cart-banner">&times;</button>
     </div>
     <section class="hero">
         <div class="hero-slider">
@@ -156,7 +173,35 @@
                 </select>
             </div>
         </div>
-        <div class="products-grid" id="products-grid"></div>
+        <div class="products-layout">
+            <div class="filter-panel" id="filter-panel">
+                <h3>Filters <button class="filter-reset-btn" id="filter-reset-btn">Reset</button></h3>
+                <div class="filter-group">
+                    <label>Max Price</label>
+                    <select id="filter-price-max">
+                        <option value="">Any</option>
+                        <option value="25">Under $25</option>
+                        <option value="50">Under $50</option>
+                        <option value="100">Under $100</option>
+                        <option value="500">Under $500</option>
+                        <option value="1000">Under $1,000</option>
+                        <option value="5000">Under $5,000</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Min Rating</label>
+                    <select id="filter-rating">
+                        <option value="">Any</option>
+                        <option value="4">4+ Stars</option>
+                        <option value="3">3+ Stars</option>
+                        <option value="2">2+ Stars</option>
+                    </select>
+                </div>
+                <button class="filter-apply-btn" id="filter-apply-btn">Apply Filters</button>
+            </div>
+                <div class="products-grid" id="products-grid"></div>
+            </div>
+        </div>
     </section>
     <section class="deal-section">
         <h2><i class="fas fa-bolt"></i> Deal of the Day</h2>
@@ -211,6 +256,22 @@
                             <label for="checkout-address">Shipping Address</label>
                             <textarea id="checkout-address" name="address" rows="4" required></textarea>
                         </div>
+                        <div class="checkout-field coupon-field">
+                            <label for="checkout-coupon">Coupon Code (optional)</label>
+                            <div class="coupon-input-row">
+                                <input type="text" id="checkout-coupon" name="couponCode" placeholder="Enter code">
+                                <button type="button" id="apply-coupon-btn" class="coupon-apply-btn">Apply</button>
+                            </div>
+                            <div id="coupon-message" class="coupon-message"></div>
+                        </div>
+                        <div class="checkout-field coupon-field">
+                            <label for="checkout-giftcard">Gift Card (optional)</label>
+                            <div class="coupon-input-row">
+                                <input type="text" id="checkout-giftcard" placeholder="Enter gift card code">
+                                <button type="button" id="apply-giftcard-btn" class="coupon-apply-btn">Apply</button>
+                            </div>
+                            <div id="giftcard-message" class="coupon-message"></div>
+                        </div>
                         <div class="checkout-field">
                             <label for="checkout-payment">Payment Method</label>
                             <select id="checkout-payment" name="paymentMethod">
@@ -255,6 +316,13 @@
                         <span class="success-order-label">Amount Payable</span>
                         <span class="success-order-value" id="success-order-total">-</span>
                     </div>
+                    <div class="success-order-row" id="success-discount-row" style="display:none;">
+                        <span class="success-order-label">Discount</span>
+                        <span class="success-order-value success-discount" id="success-discount">-</span>
+                    </div>
+                    <div class="success-order-row">
+                        <span class="success-order-label" id="success-tracking-code">-</span>
+                    </div>
                 </div>
                 <div class="success-instructions-box" id="success-instructions-box" style="display: none;">
                     <i class="fas fa-info-circle"></i>
@@ -267,25 +335,39 @@
     <div class="wishlist-page" id="wishlist-page">
         <div class="wishlist-page-header">
             <h2><i class="fas fa-heart"></i> My Wishlist</h2>
-            <button class="close-wishlist-page" onclick="toggleWishlistPage()"><i class="fas fa-times"></i></button>
+            <div class="wishlist-header-actions">
+                <button class="wishlist-share-btn" id="wishlist-share-btn" title="Share Wishlist"><i class="fas fa-share-alt"></i> Share</button>
+                <button class="close-wishlist-page" id="close-wishlist-page-btn"><i class="fas fa-times"></i></button>
+            </div>
         </div>
         <div class="wishlist-page-content" id="wishlist-page-content">
             <p class="empty-message">Loading your wishlist...</p>
         </div>
     </div>
-    <div class="wishlist-page-overlay" id="wishlist-page-overlay" onclick="toggleWishlistPage()"></div>
+    <div class="wishlist-page-overlay" id="wishlist-page-overlay"></div>
+    <div class="orders-overlay" id="orders-overlay">
+        <div class="orders-page" id="orders-page">
+            <div class="orders-page-header">
+                <h2><i class="fas fa-box-open"></i> Your Orders</h2>
+                <button class="close-orders-page" id="close-orders-page-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="orders-page-content" id="orders-page-content">
+                <p class="empty-message">Loading your orders...</p>
+            </div>
+        </div>
+    </div>
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
         <span id="toast-message">Item added to cart</span>
     </div>
 
-    <div class="chat-button" id="chat-button" onclick="toggleChat()">
+    <div class="chat-button" id="chat-button">
         <i class="fas fa-comment-dots"></i>
     </div>
     <div class="chat-panel" id="chat-panel">
         <div class="chat-header">
             <span><i class="fas fa-robot"></i> AI Assistant</span>
-            <button onclick="toggleChat()"><i class="fas fa-times"></i></button>
+            <button id="chat-close-btn"><i class="fas fa-times"></i></button>
         </div>
         <div class="chat-messages" id="chat-messages">
             <div class="chat-msg bot">
@@ -293,8 +375,8 @@
             </div>
         </div>
         <div class="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Type your question..." onkeydown="if(event.key==='Enter') sendChat()">
-            <button onclick="sendChat()"><i class="fas fa-paper-plane"></i></button>
+            <input type="text" id="chat-input" placeholder="Type your question...">
+            <button id="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
 
@@ -344,12 +426,31 @@
         </div>
     </footer>
 
-    <div class="modal-overlay" id="auth-modal" onclick="closeAuthModal(event)">
-        <div class="auth-modal" onclick="event.stopPropagation()">
-            <button class="auth-close" onclick="closeAuthModal()">&times;</button>
+    <div class="giftcard-modal-overlay" id="giftcard-modal-overlay" style="display:none;">
+        <div class="giftcard-modal">
+            <h2><i class="fas fa-gift"></i> Purchase Gift Card</h2>
+            <div class="giftcard-form">
+                <label>Amount ($5 - $500)</label>
+                <div class="giftcard-amounts">
+                    <button class="giftcard-amount-btn" data-amount="10">$10</button>
+                    <button class="giftcard-amount-btn" data-amount="25">$25</button>
+                    <button class="giftcard-amount-btn" data-amount="50">$50</button>
+                    <button class="giftcard-amount-btn" data-amount="100">$100</button>
+                </div>
+                <input type="number" id="giftcard-custom-amount" min="5" max="500" placeholder="Custom amount">
+                <button id="purchase-giftcard-btn" class="giftcard-purchase-btn">Purchase Gift Card</button>
+                <div id="giftcard-result" class="coupon-message"></div>
+                <button class="giftcard-close-btn" id="giftcard-close-btn">&times; Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="auth-modal">
+        <div class="auth-modal" id="auth-modal-content">
+            <button class="auth-close" id="auth-close-btn">&times;</button>
             <div class="auth-tabs">
-                <button class="auth-tab active" id="auth-tab-signin" onclick="switchAuthTab('signin')">Sign In</button>
-                <button class="auth-tab" id="auth-tab-signup" onclick="switchAuthTab('signup')">Create Account</button>
+                <button class="auth-tab active" id="auth-tab-signin" data-tab="signin">Sign In</button>
+                <button class="auth-tab" id="auth-tab-signup" data-tab="signup">Create Account</button>
             </div>
             <div id="auth-signin-form">
                 <h3>Sign In</h3>
@@ -358,8 +459,8 @@
                 <input type="email" id="signin-email" placeholder="Enter your email" autocomplete="email">
                 <label>Password</label>
                 <input type="password" id="signin-password" placeholder="Enter your password" autocomplete="current-password">
-                <button class="auth-submit" onclick="signIn()">Sign In</button>
-                <p class="auth-toggle-text">New here? <a href="#" onclick="switchAuthTab('signup')">Create an account</a></p>
+                <button class="auth-submit" id="auth-signin-btn">Sign In</button>
+                <p class="auth-toggle-text">New here? <a href="#" id="auth-toggle-signup">Create an account</a></p>
             </div>
             <div id="auth-signup-form" style="display:none">
                 <h3>Create Account</h3>
@@ -370,8 +471,8 @@
                 <input type="email" id="signup-email" placeholder="Enter your email" autocomplete="email">
                 <label>Password</label>
                 <input type="password" id="signup-password" placeholder="At least 4 characters" autocomplete="new-password">
-                <button class="auth-submit" onclick="signUp()">Create your Amazon account</button>
-                <p class="auth-toggle-text">Already have an account? <a href="#" onclick="switchAuthTab('signin')">Sign in</a></p>
+                <button class="auth-submit" id="auth-signup-btn">Create your Amazon account</button>
+                <p class="auth-toggle-text">Already have an account? <a href="#" id="auth-toggle-signin">Sign in</a></p>
             </div>
         </div>
     </div>

@@ -1,0 +1,12 @@
+{
+  "name": "Amazon Store",
+  "short_name": "Amazon",
+  "description": "Shop everything with great deals",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#131921",
+  "icons": [
+    { "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23131921' width='192' height='192' rx='32'/><text fill='%23febd69' x='50%25' y='55%25' text-anchor='middle' dy='.3em' font-size='120' font-family='sans-serif'>A</text></svg>", "sizes": "192x192", "type": "image/svg+xml" }
+  ]
+}

@@ -1,2 +1,5 @@
 flask>=3.0
 gunicorn>=21.2
+python-dotenv>=1.0
+flask-limiter>=3.5
+pytest>=7.0
