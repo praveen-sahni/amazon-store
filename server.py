@@ -8,9 +8,11 @@ import json
 import os
 import re
 import random
+import smtplib
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+from email.mime.text import MIMEText
 
 from flask import Flask, g, jsonify, request, send_from_directory, session
 from dotenv import load_dotenv
@@ -19,6 +21,16 @@ load_dotenv()
 
 app = Flask(__name__, static_folder=None)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "amazon-clone-dev-secret-key-change-in-production")
+
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    csp = "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https: ws:;"
+    response.headers['Content-Security-Policy'] = csp
+    return response
 
 # Rate limiting
 app.config["RATELIMIT_ENABLED"] = os.environ.get("RATELIMIT_ENABLED", "true").lower() == "true"
@@ -60,6 +72,43 @@ def close_db(_exc=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+def send_order_confirmation_email(order_id, email, customer_name, items, total, tracking_code):
+    """Send order confirmation. In dev mode, logs to console."""
+    subject = f"Order Confirmed - {order_id}"
+    items_html = "".join(
+        f"<tr><td>{i['title']}</td><td>{i['quantity']}</td><td>${i['price']:.2f}</td><td>${i['price']*i['quantity']:.2f}</td></tr>"
+        for i in items
+    )
+    body = f"""
+    <h2>Thank you for your order, {customer_name}!</h2>
+    <p>Order <strong>{order_id}</strong> has been confirmed.</p>
+    <p>Tracking: <strong>{tracking_code}</strong></p>
+    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%">
+    <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+    {items_html}
+    <tr><td colspan="3"><strong>Total</strong></td><td><strong>${total:.2f}</strong></td></tr>
+    </table>
+    """
+    print(f"\n{'='*60}")
+    print(f"EMAIL to {email}: Order Confirmation - {order_id}")
+    print(f"{'='*60}")
+    print(f"Subject: {subject}")
+    print(f"Body: {body[:500]}...")
+    print(f"{'='*60}\n")
+    # Production: uncomment below with real SMTP settings
+    # try:
+    #     msg = MIMEText(body, 'html')
+    #     msg['Subject'] = subject
+    #     msg['To'] = email
+    #     msg['From'] = os.environ.get('SMTP_FROM', 'noreply@amazon-store.com')
+    #     with smtplib.SMTP(os.environ.get('SMTP_HOST', ''), int(os.environ.get('SMTP_PORT', 587))) as s:
+    #         s.starttls()
+    #         s.login(os.environ.get('SMTP_USER', ''), os.environ.get('SMTP_PASS', ''))
+    #         s.send_message(msg)
+    # except Exception as e:
+    #     print(f"Failed to send email: {e}")
 
 
 def init_db():
@@ -183,6 +232,12 @@ def init_db():
             created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
     """)
     # Add status column if not present
     try:
@@ -209,6 +264,10 @@ def init_db():
         pass
     try:
         db.execute("ALTER TABLE products ADD COLUMN variants TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute("ALTER TABLE users ADD COLUMN password_hash TEXT DEFAULT ''")
     except sqlite3.OperationalError:
         pass
     # Seed flash sales
@@ -616,6 +675,16 @@ def checkout(session_id):
                    (ri["quantity"], ri["product_id"]))
 
     db.commit()
+
+    # Send confirmation email
+    send_order_confirmation_email(
+        order_id,
+        body.get("email", ""),
+        body.get("customerName", ""),
+        resolved_items,
+        total,
+        tracking_code
+    )
 
     if body.get("clearCartAfterCheckout", True):
         db.execute("DELETE FROM carts WHERE session_id = ?", (session_id,))
@@ -1038,6 +1107,72 @@ def validate_gift_card():
     if not gc:
         return jsonify({"valid": False, "error": "Invalid or already redeemed gift card"})
     return jsonify({"valid": True, "amount": gc["amount"], "code": gc["code"]})
+
+
+@app.route("/api/create-payment-intent", methods=["POST"])
+@limiter.limit("30 per minute") if limiter else lambda f: f
+def create_payment_intent():
+    data = request.get_json(silent=True) or {}
+    amount = int(float(data.get("amount", 0)) * 100)  # cents
+    if amount <= 0:
+        return jsonify({"error": "Invalid amount"}), 400
+    # Mock payment intent — replace with Stripe in production
+    return jsonify({
+        "clientSecret": f"pi_mock_{uuid.uuid4().hex}",
+        "amount": amount,
+        "currency": "usd",
+        "status": "requires_payment_method"
+    })
+
+
+@app.route("/api/profile", methods=["GET"])
+def get_profile():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
+    db = get_db()
+    row = db.execute("SELECT id, name, email, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "User not found"}), 404
+    order_count = db.execute("SELECT COUNT(*) as cnt FROM customer_orders WHERE session_id IN (SELECT session_id FROM user_sessions WHERE user_id = ?)", (user_id,)).fetchone()["cnt"]
+    return jsonify({
+        "id": row["id"], "name": row["name"], "email": row["email"],
+        "createdAt": row["created_at"], "orderCount": order_count
+    })
+
+@app.route("/api/profile", methods=["PUT"])
+def update_profile():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    db = get_db()
+    db.execute("UPDATE users SET name = ? WHERE id = ?", (name, user_id))
+    db.commit()
+    return jsonify({"ok": True, "name": name})
+
+@app.route("/api/profile/password", methods=["POST"])
+def change_password():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json(silent=True) or {}
+    current = data.get("currentPassword", "")
+    new_pass = data.get("newPassword", "")
+    if not current or not new_pass:
+        return jsonify({"error": "Current and new password required"}), 400
+    if len(new_pass) < 6:
+        return jsonify({"error": "New password must be at least 6 characters"}), 400
+    db = get_db()
+    row = db.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row or row["password_hash"] != hashlib.sha256(current.encode()).hexdigest():
+        return jsonify({"error": "Current password is incorrect"}), 403
+    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hashlib.sha256(new_pass.encode()).hexdigest(), user_id))
+    db.commit()
+    return jsonify({"ok": True, "message": "Password changed successfully"})
 
 
 # ---------------------------------------------------------------------------

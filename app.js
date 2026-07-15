@@ -21,6 +21,8 @@ let modalQuantity = 1;
 let dealTimerId = null;
 let checkoutContext = null;
 let wishlist = [];
+let comparisonList = [];
+const MAX_COMPARE = 4;
 let currentPage = 1;
 let isLoadingPage = false;
 
@@ -80,18 +82,18 @@ async function initializeApp() {
 
     const savedCart = localStorage.getItem('cart');
     if (savedCart) {
-      try {
+        try {
         const parsed = JSON.parse(savedCart);
         if (parsed.length > 0 && cart.length === 0) {
-          cart = parsed.map(item => {
+            cart = parsed.map(item => {
             const product = products.find(p => p.id === item.id);
             return product ? { ...product, quantity: item.quantity || 1 } : item;
-          });
-          saveCart();
-          updateCartUI();
-          setTimeout(() => showToast('Items restored from your previous session'), 1500);
+            });
+            saveCart();
+            updateCartUI();
+            setTimeout(() => showToast('Items restored from your previous session'), 1500);
         }
-      } catch {}
+        } catch {}
     }
 
     renderProducts(getPageItems());
@@ -113,7 +115,7 @@ async function initializeApp() {
         navigator.serviceWorker.register('sw.js').catch(() => {});
     }
 
-    // Gift card modal
+    // Gift card model
     const navGiftCards = getById('nav-giftcards');
     if (navGiftCards) navGiftCards.addEventListener('click', () => {
         const overlay = getById('giftcard-modal-overlay');
@@ -179,6 +181,18 @@ function showSkeleton(containerId, type) {
 }
 
 function hideSkeleton(containerId) { /* content replaces skeletons */ }
+
+function showLoading(btn) {
+    if (!btn) return;
+    btn.disabled = true;
+    btn._origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+}
+function hideLoading(btn) {
+    if (!btn) return;
+    btn.disabled = false;
+    if (btn._origHtml) btn.innerHTML = btn._origHtml;
+}
 
 function getPageItems() {
     const start = 0;
@@ -301,6 +315,45 @@ function updateWishlistUI() {
     });
 }
 
+function toggleCompare(id) {
+    const idx = comparisonList.indexOf(id);
+    if (idx > -1) { comparisonList.splice(idx, 1); }
+    else if (comparisonList.length >= MAX_COMPARE) { showToast(`Max ${MAX_COMPARE} items to compare`); return; }
+    else { comparisonList.push(id); }
+    updateCompareUI();
+}
+
+function updateCompareUI() {
+    const countEl = getById('compare-count');
+    if (countEl) countEl.textContent = comparisonList.length;
+    document.querySelectorAll('.compare-btn').forEach(btn => {
+        const pid = parseInt(btn.dataset.id);
+        btn.classList.toggle('active', comparisonList.includes(pid));
+    });
+    const panel = getById('compare-panel');
+    if (!panel) return;
+    if (comparisonList.length < 2) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    const items = comparisonList.map(id => products.find(p => p.id === id)).filter(Boolean);
+    const body = getById('compare-body');
+    if (!body) return;
+    body.innerHTML = `
+    <table class="compare-table">
+        <tr><th>Product</th>${items.map(p => `<td><img loading="lazy" src="${p.image}" width="80"><br>${p.title}</td>`).join('')}</tr>
+        <tr><th>Price</th>${items.map(p => `<td>$${p.price.toFixed(2)}</td>`).join('')}</tr>
+        <tr><th>Rating</th>${items.map(p => `<td>${'★'.repeat(Math.round(p.rating))}${'☆'.repeat(5-Math.round(p.rating))} (${p.rating})</td>`).join('')}</tr>
+        <tr><th>Category</th>${items.map(p => `<td>${p.category}</td>`).join('')}</tr>
+        <tr><th>Stock</th>${items.map(p => `<td>${p.stock > 0 ? 'In Stock' : 'Out of Stock'}</td>`).join('')}</tr>
+        <tr><th>Features</th>${items.map(p => `<td><ul>${(p.features||[]).map(f => `<li>${f}</li>`).join('')}</ul></td>`).join('')}</tr>
+    </table>
+    <button class="compare-close-btn" onclick="document.getElementById('compare-panel').style.display='none'">Close</button>`;
+}
+
+function clearCompare() {
+    comparisonList = [];
+    updateCompareUI();
+}
+
 function toggleWishlistPage() {
     const page = getById('wishlist-page');
     const overlay = getById('wishlist-page-overlay');
@@ -327,10 +380,10 @@ function renderWishlistPage() {
     }
     container.innerHTML = wishlist.map(p => `
         <div class="wishlist-item">
-            <img src="${p.image}" alt="${p.title}" data-action="quickview" data-id="${p.id}" loading="lazy">
+            <img loading="lazy" src="${p.image}" alt="${p.title}" data-action="quickview" data-id="${p.id}">
             <div class="wishlist-item-info" data-action="quickview" data-id="${p.id}">
                 <h4>${p.title}</h4>
-                <span class="wishlist-item-price">$${p.price.toFixed(2)}</span>
+                <span class="wishlist-item-price">$${p.price.toFixed(2)}</span>  
             </div>
             <div class="wishlist-item-actions">
                 <button class="add-to-cart-btn" data-action="addcart" data-id="${p.id}">Add to Cart</button>
@@ -445,7 +498,7 @@ function initProductZoom() {
 // ---------------------------------------------------------------------------
 
 function renderPriceChart(productId, data) {
-    const canvas = getById('price-chart');
+    const canvas = getById('price-ch art');
     const emptyMsg = getById('price-history-empty');
     if (!canvas || !emptyMsg) return;
     const history = data.history || [];
@@ -501,7 +554,7 @@ async function fetchOrders() {
 }
 
 async function downloadInvoice(orderId) {
-  try {
+    try {
     const r = await fetch(`${API_BASE}/api/orders/${orderId}/invoice`);
     if (!r.ok) { showToast('Failed to generate invoice'); return; }
     const html = await r.text();
@@ -512,7 +565,7 @@ async function downloadInvoice(orderId) {
     a.click();
     URL.revokeObjectURL(url);
     showToast('Invoice downloaded');
-  } catch { showToast('Failed to download invoice'); }
+    } catch { showToast('Failed to download invoice'); }
 }
 
 window.downloadInvoice = downloadInvoice;
@@ -546,23 +599,21 @@ async function toggleOrdersPage() {
                 <div class="order-items" id="order-items-${o.orderId}">
                     <p class="empty-message">Loading items...</p>
                 </div>
-                ${o.trackingCode ? `
-                <div class="order-tracking">
-                    <div class="tracking-header">
-                        <span class="tracking-code">Tracking: ${o.trackingCode}</span>
-                    </div>
-                    <div class="tracking-timeline">
-                        ${(o.trackingUpdates || []).map((u, i) => `
-                            <div class="tracking-step ${i === 0 ? 'completed' : ''}">
-                                <div class="tracking-dot"></div>
-                                <div class="tracking-info">
-                                    <span class="tracking-status">${u.status}</span>
-                                    <span class="tracking-date">${u.date || ''}</span>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>` : ''}
+                ${o.trackingUpdates && o.trackingUpdates.length ? `
+<div class="order-tracking">
+    <h4><i class="fas fa-truck"></i> Tracking: ${o.trackingCode}</h4>
+    <div class="tracking-timeline">
+        ${o.trackingUpdates.map((u, i) => `
+        <div class="tracking-step ${i === 0 ? 'active' : ''}">
+            <div class="tracking-dot"></div>
+            <div class="tracking-info">
+                <strong>${u.status}</strong>
+                <span>${u.date}</span>
+                <p>${u.message}</p>
+            </div>
+        </div>`).join('')}
+    </div>
+</div>` : ''}
                 <div class="order-total-row">
                     <span>Total (${o.itemCount} item${o.itemCount === 1 ? '' : 's'})</span>
                     <span>$${o.total.toFixed(2)}</span>
@@ -584,7 +635,7 @@ async function toggleOrdersPage() {
                 }
                 itemsEl.innerHTML = data.items.map(i => `
                     <div class="order-item">
-                        <img src="${i.image}" alt="${i.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23ddd%22 width=%2250%22 height=%2250%22/></svg>'">
+                        <img loading="lazy" src="${i.image}" alt="${i.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23ddd%22 width=%2250%22 height=%2250%22/></svg>'">
                         <div class="order-item-info">
                             <div class="order-item-title">${i.title}</div>
                             <div class="order-item-meta">Qty: ${i.quantity}</div>
@@ -637,9 +688,9 @@ function initStaticEventListeners() {
     if (filterApplyBtn) filterApplyBtn.addEventListener('click', applyFilters);
     const filterResetBtn = getById('filter-reset-btn');
     if (filterResetBtn) filterResetBtn.addEventListener('click', () => {
-      const inputs = document.querySelectorAll('.filter-panel input, .filter-panel select');
-      inputs.forEach(i => i.value = '');
-      applyFilters();
+        const inputs = document.querySelectorAll('.filter-panel input, .filter-panel select');
+        inputs.forEach(i => i.value = '');
+        applyFilters();
     });
 
     const wishlistShareBtn = getById('wishlist-share-btn');
@@ -678,6 +729,7 @@ function initEventDelegation() {
             case 'quickview': openQuickView(id); break;
             case 'addcart': addToCart(id); break;
             case 'wishlist': toggleWishlist(id); break;
+            case 'compare': toggleCompare(id); break;
             case 'removewl': removeFromWishlist(id); break;
             case 'removecart': removeFromCart(id); break;
             case 'qty-down': updateQuantity(id, -1); break;
@@ -797,6 +849,30 @@ function initEventDelegation() {
     const wlOverlay = getById('wishlist-page-overlay');
     if (wlOverlay) wlOverlay.addEventListener('click', toggleWishlistPage);
 
+    const profileLink = getById('nav-profile');
+    if (profileLink) profileLink.addEventListener('click', openProfile);
+    const profileCloseBtn = getById('profile-close-btn');
+    if (profileCloseBtn) profileCloseBtn.addEventListener('click', closeProfile);
+    const profileSaveBtn = getById('profile-save-btn');
+    if (profileSaveBtn) profileSaveBtn.addEventListener('click', saveProfile);
+    const profilePasswordBtn = getById('profile-password-btn');
+    if (profilePasswordBtn) profilePasswordBtn.addEventListener('click', changePassword);
+    const profileOverlay = getById('profile-overlay');
+    if (profileOverlay) profileOverlay.addEventListener('click', (e) => { if (e.target === profileOverlay) closeProfile(); });
+    const compareClearBtn = getById('compare-clear-btn');
+    if (compareClearBtn) compareClearBtn.addEventListener('click', clearCompare);
+
+    // Profile tab switching
+    document.querySelectorAll('.profile-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.profile-tab-content').forEach(c => c.style.display = 'none');
+            const target = getById(tab.dataset.tab);
+            if (target) target.style.display = 'block';
+        });
+    });
+
     // Search input debounce
     const searchInputEl = getById('search-input');
     if (searchInputEl) searchInputEl.addEventListener('input', debounce(handleSearch, 300));
@@ -847,7 +923,8 @@ function renderProducts(productsToRender) {
         <div class="product-card" data-id="${product.id}">
             ${product.badge ? `<span class="product-badge ${product.badge}">${product.badge === 'deal' ? 'Deal' : 'Best Seller'}</span>` : ''}
             <button class="wishlist-btn ${isWishlisted(product.id) ? 'active' : ''}" data-action="wishlist" data-id="${product.id}"><i class="fas fa-heart"></i></button>
-            <img src="${product.image}" alt="${product.title}" class="product-image" data-action="quickview" data-id="${product.id}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><rect fill=%22%23f5f5f5%22 width=%22200%22 height=%22200%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2214%22>No Image</text></svg>'">
+            <button class="compare-btn ${comparisonList.includes(product.id) ? 'active' : ''}" data-action="compare" data-id="${product.id}" title="Compare"><i class="fas fa-balance-scale"></i></button>
+            <img loading="lazy" src="${product.image}" alt="${product.title}" class="product-image" data-action="quickview" data-id="${product.id}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><rect fill=%22%23f5f5f5%22 width=%22200%22 height=%22200%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2214%22>No Image</text></svg>'">
             <h3 class="product-title" data-action="quickview" data-id="${product.id}">${product.title}</h3>
             <div class="product-rating">
                 <span class="stars">${renderStars(product.rating)}</span>
@@ -900,7 +977,7 @@ function renderDealOfTheDay() {
         return;
     }
     container.innerHTML = `
-        <img src="${dealProduct.image}" alt="${dealProduct.title}" class="deal-image" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22><rect fill=%22%23f5f5f5%22 width=%22300%22 height=%22300%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2218%22>No Image</text></svg>'">
+        <img loading="lazy" src="${dealProduct.image}" alt="${dealProduct.title}" class="deal-image" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22><rect fill=%22%23f5f5f5%22 width=%22300%22 height=%22300%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2218%22>No Image</text></svg>'">
         <div class="deal-details">
             <h3 class="deal-title">${dealProduct.title}</h3>
             <div class="deal-timer">
@@ -966,21 +1043,37 @@ function renderRecentlyViewed() {
     }
     container.innerHTML = recentlyViewed.map(product => `
         <div class="recently-viewed-item" data-action="quickview" data-id="${product.id}">
-            <img src="${product.image}" alt="${product.title}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22><rect fill=%22%23f5f5f5%22 width=%22150%22 height=%22150%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2212%22>No Image</text></svg>'">
+            <img loading="lazy" src="${product.image}" alt="${product.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22><rect fill=%22%23f5f5f5%22 width=%22150%22 height=%22150%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2212%22>No Image</text></svg>'">
             <p class="price">$${product.price.toFixed(2)}</p>
         </div>
     `).join('');
 }
 
-function addToCart(productId, quantity = 1) {
-    const product = getProductById(productId);
+async function addToCart(id, quantity = 1) {
+    const product = getProductById(id);
     if (!product) return;
-    const existingItem = cart.find(item => item.id === productId);
-    if (existingItem) existingItem.quantity += quantity;
-    else cart.push({ ...product, quantity });
-    saveCart();
+    const prevCart = JSON.parse(JSON.stringify(cart));
+    const existing = cart.find(item => item.id === id);
+    if (existing) {
+        existing.quantity = (existing.quantity || 1) + quantity;
+    } else {
+        cart.push({ ...product, quantity });
+    }
     updateCartUI();
-    showToast(`${product.title.substring(0, 40)} added to cart`);
+    saveCart();
+    showToast(`${product.title} added to cart`);
+    try {
+        const response = await fetch(`${API_BASE}/api/cart/${getSessionId()}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: cart.map(normalizeProductSnapshot) })
+        });
+        if (!response.ok) throw new Error('Sync failed');
+    } catch {
+        cart = prevCart;
+        updateCartUI();
+        saveCart();
+        showToast('Failed to sync cart', true);
+    }
 }
 
 function removeFromCart(productId) {
@@ -1008,7 +1101,7 @@ function updateCartUI() {
     } else {
         cartItemsEl.innerHTML = cart.map(item => `
             <div class="cart-item">
-                <img src="${item.image}" alt="${item.title}" class="cart-item-image" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22><rect fill=%22%23f5f5f5%22 width=%2280%22 height=%2280%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2210%22>No Image</text></svg>'">
+                <img loading="lazy" src="${item.image}" alt="${item.title}" class="cart-item-image" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22><rect fill=%22%23f5f5f5%22 width=%2280%22 height=%2280%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2210%22>No Image</text></svg>'">
                 <div class="cart-item-details">
                     <h4 class="cart-item-title">${item.title}</h4>
                     <p class="cart-item-price">$${item.price.toFixed(2)}</p>
@@ -1055,13 +1148,13 @@ function openQuickView(productId) {
     modalBodyEl.innerHTML = `
         <div class="modal-image-col">
             <div class="modal-image-wrapper" id="modal-image-wrapper">
-                <img src="${product.image}" alt="${product.title}" class="modal-image" id="modal-image" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22350%22 height=%22350%22><rect fill=%22%23f5f5f5%22 width=%22350%22 height=%22350%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2220%22>No Image</text></svg>'">
+                <img loading="lazy" src="${product.image}" alt="${product.title}" class="modal-image" id="modal-image" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22350%22 height=%22350%22><rect fill=%22%23f5f5f5%22 width=%22350%22 height=%22350%22/><text fill=%22%23999%22 x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2220%22>No Image</text></svg>'">
                 <div class="zoom-lens" id="zoom-lens"></div>
             </div>
             <div class="zoom-result" id="zoom-result"></div>
             ${(() => {
   if (product.images && product.images.length > 1) {
-    return `<div class="gallery-thumbs">${product.images.map((img, i) => `<img src="${img}" class="gallery-thumb ${i===0?'active':''}" data-index="${i}" data-action="gallery-select">`).join('')}</div>`;
+    return `<div class="gallery-thumbs">${product.images.map((img, i) => `<img loading="lazy" src="${img}" class="gallery-thumb ${i===0?'active':''}" data-index="${i}" data-action="gallery-select">`).join('')}</div>`;
   }
   return '';
 })()}
@@ -1116,7 +1209,7 @@ function openQuickView(productId) {
             ${(() => {
   let galleryHtml = '';
   if (product.images && product.images.length > 1) {
-    galleryHtml = `<div class="gallery-thumbs">${product.images.map((img, i) => `<img src="${img}" class="gallery-thumb ${i===0?'active':''}" data-index="${i}" data-action="gallery-select">`).join('')}</div>`;
+    galleryHtml = `<div class="gallery-thumbs">${product.images.map((img, i) => `<img loading="lazy" src="${img}" class="gallery-thumb ${i===0?'active':''}" data-index="${i}" data-action="gallery-select">`).join('')}</div>`;
   }
   return galleryHtml;
 })()}
@@ -1159,7 +1252,7 @@ function openQuickView(productId) {
         if (related.length === 0) { grid.innerHTML = '<p class="empty-message">No related products</p>'; return; }
         grid.innerHTML = related.map(p => `
             <div class="related-item" data-action="quickview" data-id="${p.id}">
-                <img src="${p.image}" alt="${p.title}" loading="lazy">
+                <img loading="lazy" src="${p.image}" alt="${p.title}">
                 <span class="related-price">$${p.price.toFixed(2)}</span>
             </div>
         `).join('');
@@ -1171,7 +1264,7 @@ function openQuickView(productId) {
         if (products.length === 0) { grid.innerHTML = '<p class="empty-message">No data yet</p>'; return; }
         grid.innerHTML = products.map(p => `
             <div class="related-item" data-action="quickview" data-id="${p.id}">
-                <img src="${p.image}" alt="${p.title}" loading="lazy">
+                <img loading="lazy" src="${p.image}" alt="${p.title}">
                 <span class="related-price">$${p.price.toFixed(2)}</span>
             </div>
         `).join('');
@@ -1201,7 +1294,7 @@ function openCheckoutModal(items = cart, clearCartAfterCheckout = true) {
     itemCountEl.textContent = `${checkoutContext.items.length} item${checkoutContext.items.length === 1 ? '' : 's'}`;
     summaryItemsEl.innerHTML = checkoutContext.items.map(item => `
         <div class="checkout-summary-item">
-            <img src="${item.image}" alt="${item.title}" loading="lazy">
+            <img loading="lazy" src="${item.image}" alt="${item.title}">
             <div class="checkout-summary-meta">
                 <strong>${item.title}</strong>
                 <span>Qty: ${item.quantity}</span>
@@ -1277,6 +1370,19 @@ async function submitCheckout(event) {
             }
             successModalEl.classList.add('show');
             document.body.style.overflow = 'hidden';
+            // If card payment, attempt payment intent
+            if (result.paymentMethod === 'card') {
+                try {
+                    const pi = await fetch(`${API_BASE}/api/create-payment-intent`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: result.total })
+                    });
+                    const piData = await pi.json();
+                    if (piData.clientSecret) {
+                        document.querySelector('#success-order-id').textContent += ` (Payment: ${piData.status})`;
+                    }
+                } catch {}
+            }
         }
     } catch (error) {
         console.error('Checkout failed', error);
@@ -1407,13 +1513,14 @@ function goToSlide(index) {
     dots[currentSlide]?.classList.add('active');
 }
 
-function showToast(message) {
+function showToast(message, isError) {
     const toast = getById('toast');
     const toastMsg = getById('toast-message');
     if (!toast || !toastMsg) return;
     toastMsg.textContent = message;
+    toast.className = 'toast' + (isError ? ' toast-error' : '');
     toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 3000);
+    setTimeout(() => { toast.classList.remove('show'); toast.className = 'toast'; }, 3000);
 }
 
 function debounce(func, wait) {
@@ -1661,6 +1768,63 @@ function closeAuthModal() {
     const err2 = getById('auth-signup-error');
     if (err1) err1.textContent = '';
     if (err2) err2.textContent = '';
+}
+
+async function openProfile() {
+    const overlay = getById('profile-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    const nameEl = getById('profile-name');
+    const emailEl = getById('profile-email');
+    const ordersEl = getById('profile-order-count');
+    const joinedEl = getById('profile-joined');
+    try {
+        const r = await fetch(`${API_BASE}/api/profile`, { credentials: 'include' });
+        if (!r.ok) { showToast('Please sign in first'); overlay.style.display = 'none'; return; }
+        const data = await r.json();
+        if (nameEl) nameEl.textContent = data.name;
+        if (emailEl) emailEl.textContent = data.email;
+        if (ordersEl) ordersEl.textContent = `${data.orderCount} orders`;
+        if (joinedEl) joinedEl.textContent = `Joined ${data.createdAt}`;
+    } catch { showToast('Failed to load profile'); }
+}
+
+function closeProfile() {
+    const overlay = getById('profile-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+async function saveProfile() {
+    const nameInput = getById('profile-name-input');
+    const name = nameInput?.value.trim();
+    if (!name) { showToast('Name is required'); return; }
+    try {
+        const r = await fetch(`${API_BASE}/api/profile`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }), credentials: 'include'
+        });
+        if (r.ok) { showToast('Profile updated'); openProfile(); }
+        else { const d = await r.json(); showToast(d.error || 'Failed'); }
+    } catch { showToast('Failed to update profile'); }
+}
+
+async function changePassword() {
+    const current = getById('profile-current-password')?.value;
+    const newPass = getById('profile-new-password')?.value;
+    const confirm = getById('profile-confirm-password')?.value;
+    if (!current || !newPass) { showToast('Fill all fields'); return; }
+    if (newPass !== confirm) { showToast('Passwords do not match'); return; }
+    if (newPass.length < 6) { showToast('Password must be 6+ characters'); return; }
+    try {
+        const r = await fetch(`${API_BASE}/api/profile/password`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentPassword: current, newPassword: newPass }),
+            credentials: 'include'
+        });
+        const d = await r.json();
+        if (r.ok) { showToast('Password changed!'); document.querySelectorAll('#profile-password-form input').forEach(i => i.value = ''); }
+        else showToast(d.error || 'Failed');
+    } catch { showToast('Failed to change password'); }
 }
 
 function switchAuthTab(tab) {

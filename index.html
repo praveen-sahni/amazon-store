@@ -3,13 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amazon - Shop Everything</title>
+    <title>Amazon Store - Shop Electronics, Fashion, Home & More</title>
+    <meta name="description" content="Shop the best deals on electronics, fashion, home goods, and more. Free shipping on orders over $25.">
+    <meta name="keywords" content="amazon, store, shopping, electronics, fashion, deals, online store">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="/">
+    <meta property="og:title" content="Amazon Store - Shop Everything">
+    <meta property="og:description" content="Shop the best deals on electronics, fashion, home goods, and more.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Amazon Store - Shop Everything">
+    <meta name="twitter:description" content="Shop the best deals on electronics, fashion, home goods, and more.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
     <link rel="stylesheet" href="style.css">
     <meta name="api-base-url" content="">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#131921">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Store",
+        "name": "Amazon Store",
+        "description": "Shop everything with great deals",
+        "url": "/",
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": "/?search={search_term_string}",
+            "query-input": "required name=search_term_string"
+        }
+    }
+    </script>
 </head>
 <body>
     <header class="header">
@@ -73,6 +98,7 @@
                 <li><a href="#">Customer Service</a></li>
                 <li><a href="#">Registry</a></li>
                 <li><a href="javascript:void(0)" id="nav-giftcards"><i class="fas fa-gift"></i> Gift Cards</a></li>
+                <li><a href="javascript:void(0)" id="nav-profile"><i class="fas fa-user-circle"></i> Profile</a></li>
                 <li><a href="#">Sell</a></li>
                 <li><a href="/admin"><i class="fas fa-cog"></i> Admin</a></li>
             </ul>
@@ -356,6 +382,18 @@
             </div>
         </div>
     </div>
+    <!-- Compare Panel -->
+    <div class="compare-panel" id="compare-panel" style="display:none;">
+        <div class="compare-header">
+            <h3><i class="fas fa-balance-scale"></i> Compare Products (<span id="compare-count">0</span>)</h3>
+            <div class="compare-header-actions">
+                <button id="compare-clear-btn" class="compare-clear-btn">Clear All</button>
+                <button class="compare-close-btn" onclick="this.closest('.compare-panel').style.display='none'">&times;</button>
+            </div>
+        </div>
+        <div class="compare-body" id="compare-body"></div>
+    </div>
+
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
         <span id="toast-message">Item added to cart</span>
@@ -441,6 +479,38 @@
                 <button id="purchase-giftcard-btn" class="giftcard-purchase-btn">Purchase Gift Card</button>
                 <div id="giftcard-result" class="coupon-message"></div>
                 <button class="giftcard-close-btn" id="giftcard-close-btn">&times; Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div class="profile-overlay" id="profile-overlay" style="display:none;">
+        <div class="profile-modal">
+            <button class="profile-close-btn" id="profile-close-btn">&times;</button>
+            <h2><i class="fas fa-user-circle"></i> My Account</h2>
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-tab="profile-info">Profile</button>
+                <button class="profile-tab" data-tab="profile-security">Password</button>
+            </div>
+            <div class="profile-tab-content" id="profile-info">
+                <div class="profile-detail"><strong>Name:</strong> <span id="profile-name">-</span></div>
+                <div class="profile-detail"><strong>Email:</strong> <span id="profile-email">-</span></div>
+                <div class="profile-detail"><strong>Orders:</strong> <span id="profile-order-count">-</span></div>
+                <div class="profile-detail"><strong>Member since:</strong> <span id="profile-joined">-</span></div>
+                <div class="profile-edit-section">
+                    <h4>Edit Name</h4>
+                    <input type="text" id="profile-name-input" placeholder="Your name">
+                    <button id="profile-save-btn" class="profile-action-btn">Save</button>
+                </div>
+            </div>
+            <div class="profile-tab-content" id="profile-security" style="display:none;">
+                <h4>Change Password</h4>
+                <div id="profile-password-form">
+                    <input type="password" id="profile-current-password" placeholder="Current password">
+                    <input type="password" id="profile-new-password" placeholder="New password (6+ chars)">
+                    <input type="password" id="profile-confirm-password" placeholder="Confirm new password">
+                    <button id="profile-password-btn" class="profile-action-btn">Change Password</button>
+                </div>
             </div>
         </div>
     </div>

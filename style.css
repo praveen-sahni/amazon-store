@@ -1631,6 +1631,10 @@ img {
     opacity: 1;
 }
 
+.toast-error {
+    background-color: var(--error-red) !important;
+}
+
 .toast i {
     color: var(--success-green);
     font-size: 20px;
@@ -3191,3 +3195,66 @@ body.dark-mode .giftcard-amount-btn { border-color: #444; }
 body.dark-mode .giftcard-amount-btn.active { background: #3a2a00; border-color: var(--amazon-orange); }
 body.dark-mode .abandoned-cart-banner { background: #3a3200; border-color: #665500; color: #ffd970; }
 body.dark-mode .abandoned-cart-banner button { color: #ffd970; }
+
+/* profile modal */
+.profile-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 5000; display: none; align-items: center; justify-content: center; }
+.profile-modal { background: var(--card-bg); border-radius: 12px; padding: 28px; width: 460px; max-width: 94vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); position: relative; }
+.profile-close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-gray); }
+.profile-modal h2 { font-size: 22px; margin-bottom: 16px; color: var(--text-dark); }
+.profile-modal h2 i { color: var(--amazon-link); margin-right: 8px; }
+.profile-tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid var(--border-gray); }
+.profile-tab { padding: 10px 20px; border: none; background: none; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-gray); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: var(--transition); }
+.profile-tab.active { color: var(--amazon-orange); border-bottom-color: var(--amazon-orange); }
+.profile-tab:hover { color: var(--text-dark); }
+.profile-detail { padding: 8px 0; font-size: 14px; color: var(--text-dark); border-bottom: 1px solid #eee; }
+.profile-detail strong { display: inline-block; width: 120px; color: var(--text-gray); }
+.profile-edit-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-gray); }
+.profile-edit-section h4 { font-size: 14px; margin-bottom: 8px; color: var(--text-dark); }
+.profile-edit-section input { width: 100%; padding: 8px 10px; border: 1px solid var(--border-gray); border-radius: 4px; font-size: 13px; margin-bottom: 8px; background: var(--input-bg); color: var(--text-dark); }
+.profile-action-btn { padding: 8px 20px; background: var(--amazon-yellow); border: 1px solid #a88734; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: var(--transition); }
+.profile-action-btn:hover { background: #f0c14b; }
+#profile-password-form input { margin-bottom: 8px; }
+
+/* compare panel */
+.compare-panel { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); border-top: 2px solid var(--amazon-orange); z-index: 3000; box-shadow: 0 -4px 20px rgba(0,0,0,0.15); max-height: 50vh; overflow-y: auto; }
+.compare-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border-gray); }
+.compare-header h3 { font-size: 16px; color: var(--text-dark); }
+.compare-header h3 i { color: var(--amazon-link); margin-right: 6px; }
+.compare-header-actions { display: flex; gap: 10px; align-items: center; }
+.compare-clear-btn { padding: 4px 12px; background: none; border: 1px solid var(--error-red); color: var(--error-red); border-radius: 4px; font-size: 12px; cursor: pointer; }
+.compare-close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-gray); }
+.compare-body { padding: 16px 20px; overflow-x: auto; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.compare-table th { background: var(--bg-gray); padding: 10px; text-align: left; font-weight: 600; color: var(--text-dark); border: 1px solid var(--border-gray); width: 100px; }
+.compare-table td { padding: 10px; text-align: center; border: 1px solid var(--border-gray); color: var(--text-dark); vertical-align: top; }
+.compare-table td ul { list-style: none; padding: 0; margin: 0; }
+.compare-table td ul li { padding: 2px 0; font-size: 12px; }
+.compare-btn { padding: 6px 8px; background: var(--card-bg); border: 1px solid var(--border-gray); border-radius: 4px; cursor: pointer; font-size: 14px; color: var(--text-gray); transition: var(--transition); }
+.compare-btn.active { background: var(--amazon-yellow); border-color: #a88734; color: var(--text-dark); }
+.compare-btn:hover { border-color: var(--amazon-orange); }
+
+/* tracking timeline */
+.order-tracking { margin-top: 12px; padding: 12px; background: var(--bg-gray); border-radius: 6px; }
+.order-tracking h4 { font-size: 13px; margin-bottom: 8px; color: var(--text-dark); }
+.order-tracking h4 i { color: var(--amazon-link); margin-right: 4px; }
+.tracking-timeline { display: flex; flex-direction: column; gap: 6px; }
+.tracking-step { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-left: 2px solid var(--border-gray); padding-left: 14px; position: relative; }
+.tracking-step.active { border-left-color: var(--success-green); }
+.tracking-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border-gray); position: absolute; left: -6px; top: 10px; }
+.tracking-step.active .tracking-dot { background: var(--success-green); }
+.tracking-info { flex: 1; }
+.tracking-info strong { font-size: 13px; text-transform: capitalize; color: var(--text-dark); }
+.tracking-info span { font-size: 11px; color: var(--text-gray); margin-left: 8px; }
+.tracking-info p { font-size: 12px; color: var(--text-gray); margin: 2px 0 0; }
+
+/* dark mode additions */
+body.dark-mode .profile-modal { border-color: #444; }
+body.dark-mode .profile-detail { border-color: #333; }
+body.dark-mode .profile-tab { color: #999; }
+body.dark-mode .profile-tab.active { color: var(--amazon-orange); }
+body.dark-mode .compare-panel { border-color: #444; }
+body.dark-mode .compare-table td { border-color: #333; }
+body.dark-mode .compare-table th { background: #1a1a2e; }
+body.dark-mode .order-tracking { background: #1a1a2e; }
+body.dark-mode .tracking-step { border-left-color: #444; }
+body.dark-mode .tracking-dot { background: #444; }
